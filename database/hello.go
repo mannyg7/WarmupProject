@@ -85,6 +85,7 @@ var guestbookTemplate = template.Must(template.New("book").Parse(`
     {{end}}
     <form action="/sign" method="post">
 			<div><textarea name="content" rows="3" cols="60"></textarea></div>
+			<div><textarea name="author" rows="1" cols="60"></textarea></div>
 			<br>
 			<div>
 				First name: <input type="text" name="firstName"><br>
@@ -110,21 +111,19 @@ func sign(w http.ResponseWriter, r *http.Request) {
 	// [START new_context]
 	c := appengine.NewContext(r)
 	// [END new_context]
-	// g := Greeting{
-	// 	Content: r.FormValue("content"),
-	// 	Date:    time.Now(),
-	// }
+	g := Greeting{
+		Content: r.FormValue("content"),
+		Author:  r.FormValue("author"),
+		Date:    time.Now(),
+	}
 	// [START if_user]
 	/* "user" is an imported package */
-	// if u := user.Current(c); u != nil {
-	// 	g.Author = u.String()
-	// }
 	// We set the same parent key on every Greeting entity to ensure each Greeting
 	// is in the same entity group. Queries across the single entity group
 	// will be consistent. However, the write rate to a single entity group
 	// should be limited to ~1/second.
-	// key := datastore.NewIncompleteKey(c, "Greeting", guestbookKey(c))
-	// _, err := datastore.Put(c, key, &g)
+	key := datastore.NewIncompleteKey(c, "Greeting", guestbookKey(c))
+	_, err := datastore.Put(c, key, &g)
 
 	// if err != nil {
 	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -148,11 +147,11 @@ func sign(w http.ResponseWriter, r *http.Request) {
 
 	var props datastore.PropertyList
 	props = append(props, datastore.Property{Name: r.FormValue("key1"), Value: r.FormValue("val1")})
-	// props = append(props, datastore.Property{Name: r.FormValue("key2"), Value: r.FormValue("val2")})
-	// props = append(props, datastore.Property{Name: r.FormValue("key3"), Value: r.FormValue("val3")})
+	props = append(props, datastore.Property{Name: r.FormValue("key2"), Value: r.FormValue("val2")})
+	props = append(props, datastore.Property{Name: r.FormValue("key3"), Value: r.FormValue("val3")})
 
-	key := datastore.NewIncompleteKey(c, "DynamicEntity", nil)
-	_, err := datastore.Put(c, key, &props)
+	k := datastore.NewIncompleteKey(c, "DynamicEntity", nil)
+	datastore.Put(c, k, &props)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
