@@ -95,6 +95,7 @@ var guestbookTemplate = template.Must(template.New("book").Parse(`
 			</div>
 			<br>
 			<div>
+				[Field 1] Entity Name: <input type="text" name="entname"><br>
 				[Field 1] key: <input type="text" name="key1"> value: <input type="text" name="val1"><br>
 				[Field 2] key: <input type="text" name="key2"> value: <input type="text" name="val2"><br>
 				[Field 3] key: <input type="text" name="key3"> value: <input type="text" name="val3"><br>
@@ -150,7 +151,7 @@ func sign(w http.ResponseWriter, r *http.Request) {
 	props = append(props, datastore.Property{Name: r.FormValue("key2"), Value: r.FormValue("val2")})
 	props = append(props, datastore.Property{Name: r.FormValue("key3"), Value: r.FormValue("val3")})
 
-	k := datastore.NewIncompleteKey(c, "DynamicEntity", nil)
+	k := datastore.NewIncompleteKey(c, r.FormValue("entname"), nil)
 	datastore.Put(c, k, &props)
 
 	if err != nil {
