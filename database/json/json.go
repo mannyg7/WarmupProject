@@ -42,5 +42,6 @@ func ParsePutTask(data []byte) DataEntries {
 func main() {
 	fmt.Printf("hello this is json package \n")
 	byt := []byte(`{"body": {"entityName": "ent", "payload": [{"Key1": "val1","Key2": "val2","Key3": "val3"},{"Key1": "val4","Key2": "val5","Key3": "val6"}]}}`)
-	fmt.Println(ParsePutTask(byt))
+	// fmt.Println(ParsePutTask(byt))
+	ParsePutTask(byt)
 }

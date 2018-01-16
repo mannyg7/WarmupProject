@@ -1,13 +1,18 @@
 package guestbook
 
 import (
+	"encoding/json"
+	"fmt"
 	"html/template"
+	"io/ioutil"
 	"net/http"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/log"
 )
 
 // [START greeting_struct]
@@ -19,12 +24,14 @@ type Greeting struct {
 
 // [END greeting_struct]
 
-// [START greeting_struct]
-type PersonalInfo struct {
-	FirstName string
-	LastName  string
-	Phone     string
-	Email     string
+type DataEntries struct {
+	EntityName string
+	Payloads   [][]SingleEntry
+}
+
+type SingleEntry struct {
+	Key   string
+	Value string
 }
 
 // [END greeting_struct]
@@ -32,16 +39,13 @@ type PersonalInfo struct {
 func init() {
 	http.HandleFunc("/", root)
 	http.HandleFunc("/sign", sign)
+	http.HandleFunc("/json", jsonHandler)
 }
 
 // guestbookKey returns the key used for all guestbook entries.
 func guestbookKey(c context.Context) *datastore.Key {
 	// The string "default_guestbook" here could be varied to have multiple guestbooks.
 	return datastore.NewKey(c, "Guestbook", "default_guestbook", 0, nil)
-}
-
-func personalInfoKey(c context.Context) *datastore.Key {
-	return datastore.NewKey(c, "Infobook", "default_infobook", 0, nil)
 }
 
 // [START func_root]
@@ -88,13 +92,6 @@ var guestbookTemplate = template.Must(template.New("book").Parse(`
 			<div><textarea name="author" rows="1" cols="60"></textarea></div>
 			<br>
 			<div>
-				First name: <input type="text" name="firstName"><br>
-				Last name: <input type="text" name="lastName"><br>
-				Phone: <input type="text" name="phone"><br>
-				Email: <input type="text" name="email"><br>
-			</div>
-			<br>
-			<div>
 				[Field 1] Entity Name: <input type="text" name="entname"><br>
 				[Field 1] key: <input type="text" name="key1"> value: <input type="text" name="val1"><br>
 				[Field 2] key: <input type="text" name="key2"> value: <input type="text" name="val2"><br>
@@ -126,26 +123,12 @@ func sign(w http.ResponseWriter, r *http.Request) {
 	key := datastore.NewIncompleteKey(c, "Greeting", guestbookKey(c))
 	_, err := datastore.Put(c, key, &g)
 
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	// p := PersonalInfo{
-	// 	FirstName: r.FormValue("firstName"),
-	// 	LastName:  r.FormValue("lastName"),
-	// 	Phone:     r.FormValue("phone"),
-	// 	Email:     r.FormValue("email"),
-	// }
-
-	// key = datastore.NewIncompleteKey(c, "PersonalInfo", personalInfoKey(c))
-	// _, err = datastore.Put(c, key, &p)
-
-	// if err != nil {
-	// 	http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 	return
-	// }
-
+	/* test dynamic entity */
 	var props datastore.PropertyList
 	props = append(props, datastore.Property{Name: r.FormValue("key1"), Value: r.FormValue("val1")})
 	props = append(props, datastore.Property{Name: r.FormValue("key2"), Value: r.FormValue("val2")})
@@ -164,3 +147,93 @@ func sign(w http.ResponseWriter, r *http.Request) {
 }
 
 // [END func_sign]
+
+func jsonHandler(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+
+	// Read body
+	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	var f interface{}
+	// store the json object mapping into f
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	// unpack json into a map
+	m := asMap(f)
+	// headers := m["headers"].(map[string]interface{})
+	body := asMap(m["body"])
+	entityName := asString(body["entityName"])
+	log.Infof(c, entityName)
+	payload := asArray(body["payload"])
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// loop through each entry in payload
+	for _, u := range payload {
+		var props datastore.PropertyList
+
+		kv := asMap(u)
+		// loop through each key-value pair in each entry
+		for k, v := range kv {
+			switch v.(type) {
+			case string:
+				log.Infof(c, k)
+				log.Infof(c, asString(v))
+				props = append(props, datastore.Property{Name: k, Value: asString(v)})
+			case float64:
+				log.Infof(c, k)
+				log.Infof(c, strconv.FormatFloat(asFloat(v), 'f', 5, 64))
+				props = append(props, datastore.Property{Name: k, Value: asFloat(v)})
+			case int:
+				log.Infof(c, k)
+				log.Infof(c, strconv.FormatInt(v.(int64), 10))
+				props = append(props, datastore.Property{Name: k, Value: asInt(v)})
+			default:
+				fmt.Println(k, "is of a type I don't know how to handle")
+			}
+		}
+		key := datastore.NewIncompleteKey(c, entityName, nil)
+		datastore.Put(c, key, &props)
+	}
+
+	output, err := json.Marshal(f)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	w.Write(output)
+}
+
+/* cast functions to cast object to concrete types */
+func asMap(o interface{}) map[string]interface{} {
+	return o.(map[string]interface{})
+}
+
+func asArray(o interface{}) []interface{} {
+	return o.([]interface{})
+}
+
+func asInt(o interface{}) int {
+	return o.(int)
+}
+
+func asFloat(o interface{}) float64 {
+	return o.(float64)
+}
+
+func asString(o interface{}) string {
+	return o.(string)
+}
