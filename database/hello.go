@@ -1,11 +1,15 @@
-package guestbook
+package main
 
 import (
+	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
@@ -15,6 +19,76 @@ import (
 /* function to set up handlers */
 func init() {
 	http.HandleFunc("/json", jsonHandler)
+	http.HandleFunc("/csv", readCSVs)
+}
+
+func readCSVs(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+	input := `#comment
+#comment2
+#a,b,c
+first_name,last_name,username
+"Rob","Pike",rob
+Ken,Thompson,ken
+"Robert","Griesemer","gri"
+`
+
+	br := bufio.NewReader(strings.NewReader(input))
+	br.ReadLine()
+	br.ReadLine()
+	re := csv.NewReader(br)
+	re.Comment = '*'
+	keys, keyerr := re.Read()
+	if keyerr != nil {
+		println(keyerr.Error())
+	}
+	//var datastoreKeys []*datastore.Key
+	//var datastoreProps []datastore.PropertyList
+	for {
+		var props datastore.PropertyList
+		vals, e := re.Read()
+		fmt.Println(vals, len(vals))
+		if e == io.EOF {
+			break
+		}
+		if e != nil {
+			fmt.Println(e.Error())
+			break
+		}
+		for i, v := range vals {
+			k := asString(keys[i])
+			props = append(props, datastore.Property{Name: k, Value: v})
+			//log.Infof(c, k)
+			/*
+				switch v.(type) {
+				case string:
+					//log.Infof(c, asString(v))
+					props = append(props, datastore.Property{Name: k, Value: asString(v)})
+				case float64:
+					//log.Infof(c, strconv.FormatFloat(asFloat(v), 'f', 5, 64))
+					props = append(props, datastore.Property{Name: k, Value: asFloat(v)})
+				case int:
+					//log.Infof(c, strconv.FormatInt(v.(int64), 10))
+					props = append(props, datastore.Property{Name: k, Value: asInt(v)})
+				case bool:
+					//log.Infof(c, strconv.FormatBool(v.(bool)))
+					props = append(props, datastore.Property{Name: k, Value: v.(bool)})
+				default:
+					fmt.Println(k, "is of a type I don't know how to handle")
+				}
+			*/
+		}
+		//datastoreKeys = append(datastoreKeys, key)
+		//datastoreProps = append(datastoreProps, props)
+		key := datastore.NewIncompleteKey(c, "test", nil)
+		_, errrr := datastore.Put(c, key, &props)
+		if errrr != nil {
+			log.Infof(c, "ERRRRR!"+errrr.Error())
+		}
+	}
+
+	/* ----SINGLE PUT-------*/
+
 }
 
 /* function to handle json requests */
