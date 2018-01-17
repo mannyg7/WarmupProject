@@ -27,10 +27,10 @@ func readCSVs(w http.ResponseWriter, r *http.Request) {
 	input := `#comment
 #comment2
 #a,b,c
-first_name,last_name,username
-"Rob","Pike",rob
-Ken,Thompson,ken
-"Robert","Griesemer","gri"
+first_name,3,2.5
+"Rob",1,2.5
+Ken,0,1.25
+"Robert",1.222,10.0
 `
 
 	br := bufio.NewReader(strings.NewReader(input))
@@ -57,7 +57,16 @@ Ken,Thompson,ken
 		}
 		for i, v := range vals {
 			k := asString(keys[i])
-			props = append(props, datastore.Property{Name: k, Value: v})
+			if b, berr := strconv.ParseBool(v); berr == nil {
+				props = append(props, datastore.Property{Name: k, Value: b})
+			} else if f, ferr := strconv.ParseFloat(v, 64); ferr == nil {
+				props = append(props, datastore.Property{Name: k, Value: f})
+			} else if i, ierr := strconv.ParseInt(v, 10, 64); ierr == nil {
+				props = append(props, datastore.Property{Name: k, Value: i})
+			} else {
+				props = append(props, datastore.Property{Name: k, Value: v})
+			}
+
 			//log.Infof(c, k)
 			/*
 				switch v.(type) {
@@ -80,7 +89,7 @@ Ken,Thompson,ken
 		}
 		//datastoreKeys = append(datastoreKeys, key)
 		//datastoreProps = append(datastoreProps, props)
-		key := datastore.NewIncompleteKey(c, "test", nil)
+		key := datastore.NewIncompleteKey(c, "test-csv-types", nil)
 		_, errrr := datastore.Put(c, key, &props)
 		if errrr != nil {
 			log.Infof(c, "ERRRRR!"+errrr.Error())
@@ -225,4 +234,8 @@ func asFloat(o interface{}) float64 {
 
 func asString(o interface{}) string {
 	return o.(string)
+}
+
+func asBool(o interface{}) bool {
+	return o.(bool)
 }
