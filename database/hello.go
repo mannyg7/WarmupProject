@@ -173,7 +173,8 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 	body := asMap(m["body"])
 	entityName := asString(body["entityName"])
 	log.Infof(c, entityName)
-	payload := asArray(body["payload"])
+	keys := asArray(body["keys"])
+	vals := asArray(body["values"])
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -181,23 +182,21 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// loop through each entry in payload
-	for _, u := range payload {
+	for _, val := range vals {
 		var props datastore.PropertyList
-
-		kv := asMap(u)
+		vSet := asArray(val)
 		// loop through each key-value pair in each entry
-		for k, v := range kv {
+		for i, v := range vSet {
+			k := asString(keys[i])
+			log.Infof(c, k)
 			switch v.(type) {
 			case string:
-				log.Infof(c, k)
 				log.Infof(c, asString(v))
 				props = append(props, datastore.Property{Name: k, Value: asString(v)})
 			case float64:
-				log.Infof(c, k)
 				log.Infof(c, strconv.FormatFloat(asFloat(v), 'f', 5, 64))
 				props = append(props, datastore.Property{Name: k, Value: asFloat(v)})
 			case int:
-				log.Infof(c, k)
 				log.Infof(c, strconv.FormatInt(v.(int64), 10))
 				props = append(props, datastore.Property{Name: k, Value: asInt(v)})
 			default:
