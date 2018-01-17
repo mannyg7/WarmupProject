@@ -199,6 +199,9 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 			case int:
 				log.Infof(c, strconv.FormatInt(v.(int64), 10))
 				props = append(props, datastore.Property{Name: k, Value: asInt(v)})
+			case bool:
+				log.Infof(c, strconv.FormatBool(v.(bool)))
+				props = append(props, datastore.Property{Name: k, Value: v.(bool)})
 			default:
 				fmt.Println(k, "is of a type I don't know how to handle")
 			}
