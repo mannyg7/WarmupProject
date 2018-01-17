@@ -109,10 +109,10 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 		datastoreKeys = append(datastoreKeys, key)
 		datastoreProps = append(datastoreProps, props)
 
-		if count%3000 == 0 {
+		if count%300 == 0 {
 			log.Infof(c, strconv.Itoa(count))
 			log.Infof(c, strconv.Itoa(len(datastoreKeys)))
-			_, storeerror := datastore.PutMulti(c, datastoreKeys[count-3000:count], datastoreProps[count-3000:count])
+			_, storeerror := datastore.PutMulti(c, datastoreKeys[count-300:count], datastoreProps[count-300:count])
 			if storeerror != nil {
 				log.Infof(c, storeerror.Error())
 				http.Error(w, storeerror.Error(), 500)
