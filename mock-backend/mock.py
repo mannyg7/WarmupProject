@@ -21,9 +21,9 @@ for row in reader:
 print len(vals)
 json_req1 = {
 	"body":{
-        "entityName": "TestCount",
+        "entityName": "testCount",
         "keys": headers,
-        "values": vals[1:2000]
+        "values": vals
         }
 	}
 json_req2 = {

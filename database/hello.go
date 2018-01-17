@@ -214,22 +214,27 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 			default:
 				fmt.Println(k, "is of a type I don't know how to handle")
 			}
-			key := datastore.NewIncompleteKey(c, entityName, nil)
-			_, err = datastore.Put(c, key, props)
 		}
-
 		key := datastore.NewIncompleteKey(c, entityName, nil)
+		/* ----SINGLE PUT-------*/
+		/*
+			_, errrr := datastore.Put(c, key, &props)
+			if errrr != nil {
+				log.Infof(c, "ERRRRR!"+errrr.Error())
+			}
+		*/
 		datastoreKeys = append(datastoreKeys, key)
 		datastoreProps = append(datastoreProps, props)
 
-		if count%1000 == 0 {
+		if count%3000 == 0 {
 			log.Infof(c, strconv.Itoa(count))
 			log.Infof(c, strconv.Itoa(len(datastoreKeys)))
-			//_, storeerror := datastore.PutMulti(c, datastoreKeys[count-1000:count], datastoreProps[count-1000:count])
-			//if storeerror != nil {
-			//		log.Infof(c, storeerror.Error())
-			//		http.Error(w, storeerror.Error(), 500)
-			//	}
+			_, storeerror := datastore.PutMulti(c, datastoreKeys[count-3000:count], datastoreProps[count-3000:count])
+			if storeerror != nil {
+				log.Infof(c, storeerror.Error())
+				http.Error(w, storeerror.Error(), 500)
+			}
+
 		}
 
 	}
