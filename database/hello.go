@@ -2,6 +2,7 @@ package hello
 
 import (
 	"bufio"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -21,14 +22,18 @@ import (
 /* function to set up handlers */
 func init() {
 	http.HandleFunc("/json", jsonHandler)
-	http.HandleFunc("/csv", readCSVs)
-	http.HandleFunc("/file", readFile)
+	http.HandleFunc("/csv", csvHandler)
 }
 
-func readFile(w http.ResponseWriter, r *http.Request) {
+/* function to add csv file to datastore.
+ * This function will read fileName field from JSON in POST request,
+ * find corresponding file in Google Storage, parse csv, and store
+ * entries to Google Datastore.
+**/
+func csvHandler(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 
-	/* read filename from json */
+	/* start read filename from json */
 	b, err := ioutil.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
@@ -50,94 +55,47 @@ func readFile(w http.ResponseWriter, r *http.Request) {
 	m := asMap(f)
 	// headers := m["headers"].(map[string]interface{})
 	fileName := asString(m["fileName"])
+	/* end read filename from json */
 
-	/* read file from Google Storage*/
+	/* start read csv file */
+	data := readFile(c, fileName)
 
-	// initialization
-	bucketName, err := file.DefaultBucketName(c)
-	if err != nil {
-		log.Errorf(c, "failed to get default GCS bucket name: %v", err)
-	}
-
-	client, err := storage.NewClient(c)
-	if err != nil {
-		log.Errorf(c, "failed to create client: %v", err)
-		return
-	}
-	defer client.Close()
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprintf(w, "Demo GCS Application running from Version: %v\n", appengine.VersionID(c))
-	fmt.Fprintf(w, "Using bucket name: %v\n\n", bucketName)
-
-	bucket := client.Bucket(bucketName)
-
-	rc, err := bucket.Object(fileName).NewReader(c)
-	fmt.Fprintf(w, "reader created")
-	if err != nil {
-		log.Errorf(c, "readFile: unable to open file from bucket %q, file %q: %v", bucketName, fileName, err)
-		return
-	}
-	defer rc.Close()
-	slurp, err := ioutil.ReadAll(rc)
-	fmt.Fprintf(w, "content read\n")
-	if err != nil {
-		log.Errorf(c, "readFile: unable to read data from bucket %q, file %q: %v", bucketName, fileName, err)
+	if data == "err" {
+		log.Errorf(c, "Google Storage file read failed\n")
 		return
 	}
 
-	data := asString(slurp[:])
-	reader := csv.NewReader(strings.NewReader(data))
-
-	for {
-		record, err := reader.Read()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Errorf(c, asString(err))
-		}
-
-		fmt.Fprint(w, asString(record))
-	}
-
-	// fmt.Fprint(w, string(slurp[:]))
-
-}
-
-func readCSVs(w http.ResponseWriter, r *http.Request) {
-	c := appengine.NewContext(r)
-	input := `#comment
-#comment2
-#a,b,c
-first_name,3,2.5
-"Rob",1,2.5
-Ken,0,1.25
-"Robert",1.222,10.0
-`
-
-	br := bufio.NewReader(strings.NewReader(input))
+	br := bufio.NewReader(strings.NewReader(data))
+	/* HACK: assume CSV format to be
+	 * #comment
+	 * #comment
+	 * #key1 key2 key3...
+	**/
 	br.ReadLine()
 	br.ReadLine()
-	re := csv.NewReader(br)
-	re.Comment = '*'
-	keys, keyerr := re.Read()
+
+	reader := csv.NewReader(br)
+	reader.Comment = '*'
+	keys, keyerr := reader.Read()
+	// HACK: remove the # in front of first key
+	keys[0] = strings.Split(keys[0], "#")[1]
 	if keyerr != nil {
 		println(keyerr.Error())
 	}
-	//var datastoreKeys []*datastore.Key
-	//var datastoreProps []datastore.PropertyList
+
 	for {
 		var props datastore.PropertyList
-		vals, e := re.Read()
-		fmt.Println(vals, len(vals))
-		if e == io.EOF {
+		vals, err := reader.Read()
+
+		if err == io.EOF {
 			break
 		}
-		if e != nil {
-			fmt.Println(e.Error())
+
+		if err != nil {
+			log.Errorf(c, "csv read error %s", err.Error())
 			break
 		}
+
 		for i, v := range vals {
 			k := asString(keys[i])
 			if b, berr := strconv.ParseBool(v); berr == nil {
@@ -149,38 +107,16 @@ Ken,0,1.25
 			} else {
 				props = append(props, datastore.Property{Name: k, Value: v})
 			}
-
-			//log.Infof(c, k)
-			/*
-				switch v.(type) {
-				case string:
-					//log.Infof(c, asString(v))
-					props = append(props, datastore.Property{Name: k, Value: asString(v)})
-				case float64:
-					//log.Infof(c, strconv.FormatFloat(asFloat(v), 'f', 5, 64))
-					props = append(props, datastore.Property{Name: k, Value: asFloat(v)})
-				case int:
-					//log.Infof(c, strconv.FormatInt(v.(int64), 10))
-					props = append(props, datastore.Property{Name: k, Value: asInt(v)})
-				case bool:
-					//log.Infof(c, strconv.FormatBool(v.(bool)))
-					props = append(props, datastore.Property{Name: k, Value: v.(bool)})
-				default:
-					fmt.Println(k, "is of a type I don't know how to handle")
-				}
-			*/
 		}
+		// TODO： multi-add
 		//datastoreKeys = append(datastoreKeys, key)
 		//datastoreProps = append(datastoreProps, props)
 		key := datastore.NewIncompleteKey(c, "test-csv-types", nil)
-		_, errrr := datastore.Put(c, key, &props)
-		if errrr != nil {
-			log.Infof(c, "ERRRRR!"+errrr.Error())
+		_, err = datastore.Put(c, key, &props)
+		if err != nil {
+			log.Infof(c, "Datastore Error"+err.Error())
 		}
 	}
-
-	/* ----SINGLE PUT-------*/
-
 }
 
 /* function to handle json requests */
@@ -296,6 +232,43 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("content-type", "application/json")
 	w.Write(output)
+}
+
+/* helper function to read file from Google Storage */
+func readFile(c context.Context, fileName string) string {
+	/* read file from Google Storage*/
+
+	// initialization
+	bucketName, err := file.DefaultBucketName(c)
+	if err != nil {
+		log.Errorf(c, "failed to get default GCS bucket name: %v", err)
+	}
+
+	client, err := storage.NewClient(c)
+	if err != nil {
+		log.Errorf(c, "failed to create client: %v", err)
+		return "err"
+	}
+	defer client.Close()
+
+	bucket := client.Bucket(bucketName)
+
+	rc, err := bucket.Object(fileName).NewReader(c)
+	if err != nil {
+		log.Errorf(c, "readFile: unable to open file from bucket %q, file %q: %v", bucketName, fileName, err)
+		return "err"
+	}
+
+	defer rc.Close()
+
+	slurp, err := ioutil.ReadAll(rc)
+	if err != nil {
+		log.Errorf(c, "readFile: unable to read data from bucket %q, file %q: %v", bucketName, fileName, err)
+		return "err"
+	}
+
+	data := string(slurp[:])
+	return data
 }
 
 /* cast functions to cast object to concrete types */
