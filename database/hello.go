@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	//"net/url"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,7 @@ import (
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/file"
 	"google.golang.org/appengine/log"
+	//"google.golang.org/appengine/taskqueue"
 )
 
 /* function to set up handlers */
@@ -36,7 +38,8 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 
 	/* start read filename from json */
 	b, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
+	//log.Infof(c, "request closed")
+
 	if err != nil {
 		log.Infof(c, "reading body")
 		http.Error(w, err.Error(), 500)
@@ -61,6 +64,7 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 	/* start read csv file */
 	// data := readFile(c, fileName)
 	data := readBlob(c, fileName)
+	//data := "a"
 
 	if data == "err" {
 		log.Errorf(c, "Google Storage file read failed\n")
@@ -68,11 +72,14 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	br := bufio.NewReader(strings.NewReader(data))
+	//go csvHelper(r, data, entityName)
+	//t := taskqueue.NewPOSTTask("/csvhandler", url.Values())
+	defer r.Body.Close()
 	/* HACK: assume CSV format to be
 	 * #comment
 	 * #comment
 	 * #key1 key2 key3...
-	**/
+	 */
 	br.ReadLine()
 	br.ReadLine()
 
@@ -119,6 +126,7 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 			log.Infof(c, "Datastore Error"+err.Error())
 		}
 	}
+
 }
 
 /* function to handle json requests */
@@ -129,7 +137,7 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Read body from request into variable b
 	b, err := ioutil.ReadAll(r.Body)
-	defer r.Body.Close()
+	r.Body.Close()
 	if err != nil {
 		log.Infof(c, "reading body")
 		http.Error(w, err.Error(), 500)
