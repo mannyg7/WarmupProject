@@ -11,8 +11,10 @@ import (
 	"strconv"
 	"strings"
 
+	"cloud.google.com/go/storage"
 	"google.golang.org/appengine"
 	"google.golang.org/appengine/datastore"
+	"google.golang.org/appengine/file"
 	"google.golang.org/appengine/log"
 )
 
@@ -20,6 +22,87 @@ import (
 func init() {
 	http.HandleFunc("/json", jsonHandler)
 	http.HandleFunc("/csv", readCSVs)
+	http.HandleFunc("/file", readFile)
+}
+
+func readFile(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+
+	/* read filename from json */
+	b, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		log.Infof(c, "reading body")
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	/* interface{} is essentially object in Java */
+	var f interface{}
+	// store the json object mapping into f
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		log.Infof(c, "marshalling: "+err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	m := asMap(f)
+	// headers := m["headers"].(map[string]interface{})
+	fileName := asString(m["fileName"])
+
+	/* read file from Google Storage*/
+
+	// initialization
+	bucketName, err := file.DefaultBucketName(c)
+	if err != nil {
+		log.Errorf(c, "failed to get default GCS bucket name: %v", err)
+	}
+
+	client, err := storage.NewClient(c)
+	if err != nil {
+		log.Errorf(c, "failed to create client: %v", err)
+		return
+	}
+	defer client.Close()
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, "Demo GCS Application running from Version: %v\n", appengine.VersionID(c))
+	fmt.Fprintf(w, "Using bucket name: %v\n\n", bucketName)
+
+	bucket := client.Bucket(bucketName)
+
+	rc, err := bucket.Object(fileName).NewReader(c)
+	fmt.Fprintf(w, "reader created")
+	if err != nil {
+		log.Errorf(c, "readFile: unable to open file from bucket %q, file %q: %v", bucketName, fileName, err)
+		return
+	}
+	defer rc.Close()
+	slurp, err := ioutil.ReadAll(rc)
+	fmt.Fprintf(w, "content read\n")
+	if err != nil {
+		log.Errorf(c, "readFile: unable to read data from bucket %q, file %q: %v", bucketName, fileName, err)
+		return
+	}
+
+	data := asString(slurp[:])
+	reader := csv.NewReader(strings.NewReader(data))
+
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Errorf(c, asString(err))
+		}
+
+		fmt.Fprint(w, asString(record))
+	}
+
+	// fmt.Fprint(w, string(slurp[:]))
+
 }
 
 func readCSVs(w http.ResponseWriter, r *http.Request) {
