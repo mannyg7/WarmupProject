@@ -14,6 +14,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"google.golang.org/appengine"
+	"google.golang.org/appengine/blobstore"
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/file"
 	"google.golang.org/appengine/log"
@@ -53,12 +54,13 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	m := asMap(f)
-	// headers := m["headers"].(map[string]interface{})
 	fileName := asString(m["fileName"])
+	entityName := asString(m["entityName"])
 	/* end read filename from json */
 
 	/* start read csv file */
-	data := readFile(c, fileName)
+	// data := readFile(c, fileName)
+	data := readBlob(c, fileName)
 
 	if data == "err" {
 		log.Errorf(c, "Google Storage file read failed\n")
@@ -111,7 +113,7 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 		// TODO： multi-add
 		//datastoreKeys = append(datastoreKeys, key)
 		//datastoreProps = append(datastoreProps, props)
-		key := datastore.NewIncompleteKey(c, "test-csv-types", nil)
+		key := datastore.NewIncompleteKey(c, entityName, nil)
 		_, err = datastore.Put(c, key, &props)
 		if err != nil {
 			log.Infof(c, "Datastore Error"+err.Error())
@@ -262,6 +264,48 @@ func readFile(c context.Context, fileName string) string {
 	defer rc.Close()
 
 	slurp, err := ioutil.ReadAll(rc)
+	if err != nil {
+		log.Errorf(c, "readFile: unable to read data from bucket %q, file %q: %v", bucketName, fileName, err)
+		return "err"
+	}
+
+	data := string(slurp[:])
+	return data
+}
+
+/* helper function to read file from Google Storage into blob */
+func readBlob(c context.Context, fileName string) string {
+	/* read file from Google Storage*/
+
+	// initialization
+	bucketName, err := file.DefaultBucketName(c)
+	if err != nil {
+		log.Errorf(c, "failed to get default GCS bucket name: %v", err)
+	}
+
+	client, err := storage.NewClient(c)
+	if err != nil {
+		log.Errorf(c, "failed to create client: %v", err)
+		return "err"
+	}
+	defer client.Close()
+
+	// bucket := client.Bucket(bucketName)
+
+	// rc, err := bucket.Object(fileName).NewReader(c)
+	path := "/gs/" + bucketName + "/" + fileName
+	blobKey, err := blobstore.BlobKeyForFile(c, path)
+	blobReader := blobstore.NewReader(c, blobKey)
+	slurp, err := ioutil.ReadAll(blobReader)
+
+	if err != nil {
+		log.Errorf(c, "readFile: unable to open file from bucket %q, file %q: %v", bucketName, fileName, err)
+		return "err"
+	}
+
+	// defer rc.Close()
+
+	// slurp, err := ioutil.ReadAll(rc)
 	if err != nil {
 		log.Errorf(c, "readFile: unable to read data from bucket %q, file %q: %v", bucketName, fileName, err)
 		return "err"
