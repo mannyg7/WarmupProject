@@ -28,6 +28,7 @@ func init() {
 	http.HandleFunc("/csv", csvHandler)
 	// http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/query", queryTest)
+	http.HandleFunc("/query2", queryTest2)
 }
 
 /* function to add csv file to datastore.
@@ -170,6 +171,13 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Infof(c, "completed")
 	}
+}
+
+func queryTest2(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+	q := datastore.NewQuery("tvs") //.Filter("BASE>", 10.0).Order("BASE")
+	var propLists []datastore.PropertyList
+	keys, err := q.GetAll(c, propLists)
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -410,6 +418,21 @@ func readBlob(c context.Context, fileName string) string {
 
 	data := string(slurp[:])
 	return data
+}
+
+/* helper function to convert Property array to json object */
+func saveJSONResponse(props []datastore.PropertyList) []byte {
+	var keys []string
+	var vals [][]interface{}
+	m := make(map[string]interface{})
+	for _, prop := range props {
+		m[asString(prop.Name)] = prop.Value
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		fmt.Println("error in converting json")
+	}
+	return b
 }
 
 /* cast functions to cast object to concrete types */
