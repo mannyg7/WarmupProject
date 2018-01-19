@@ -26,6 +26,8 @@ import (
 func init() {
 	http.HandleFunc("/json", jsonHandler)
 	http.HandleFunc("/csv", csvHandler)
+	// http.HandleFunc("/query", queryHandler)
+	http.HandleFunc("/query", queryTest)
 }
 
 /* function to add csv file to datastore.
@@ -126,6 +128,73 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+}
+
+func queryTest(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+	q := datastore.NewQuery("tsv").Filter("BASE>", 10.0).Order("BASE")
+	t := q.Run(c)
+	for {
+		var p interface{}
+		_, err := t.Next(&p)
+		if err == datastore.Done {
+			log.Errorf(c, "datastore Done")
+			break // No further entities match the query.
+		}
+		if err != nil {
+			log.Errorf(c, "fetching next Person: %v", err)
+			break
+		}
+		// Do something with Person p and Key k
+		fmt.Fprintln(w, p)
+		log.Infof(c, p.(string))
+	}
+}
+
+func queryHandler(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+	log.Infof(c, "request")
+
+	// Read body from request into variable b
+	b, err := ioutil.ReadAll(r.Body)
+	r.Body.Close()
+	if err != nil {
+		log.Infof(c, "reading body")
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	/* interface{} is essentially object in Java */
+	var f interface{}
+	// store the json object mapping into f
+	err = json.Unmarshal(b, &f)
+	//log.Infof(c, "body:"+string(b))
+	if err != nil {
+		log.Errorf(c, "marshalling: "+err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	/*{
+		headers (optional) {...},
+		body: {
+			entityName: string,
+			keys: [key1,key2,...,key],
+			values: [
+				[val1, val2, val3...],
+				[val1, val2, val3...]
+			]
+		}
+	}*/
+
+	// unpack json into a map
+	m := asMap(f)
+	// headers := m["headers"].(map[string]interface{})
+	body := asMap(m["body"])
+	entityName := asString(body["entityName"])
+	log.Infof(c, entityName)
+	// keys := asArray(body["keys"])
+	// vals := asArray(body["values"])
 }
 
 /* function to handle json requests */
