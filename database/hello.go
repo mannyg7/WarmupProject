@@ -147,7 +147,7 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		// Do something with Person p and Key k
-		fmt.Fprintln(w, p)
+		fmt.Fprintln(` w, p)
 		log.Infof(c, "completed")
 	}
 }
