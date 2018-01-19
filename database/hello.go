@@ -107,16 +107,17 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 
 		for i, v := range vals {
 			k := asString(keys[i])
-			if b, berr := strconv.ParseBool(v); berr == nil {
-				props = append(props, datastore.Property{Name: k, Value: b})
+			if i, berr := strconv.ParseInt(v, 10, 64); berr == nil {
+				props = append(props, datastore.Property{Name: k, Value: i})
 			} else if f, ferr := strconv.ParseFloat(v, 64); ferr == nil {
 				props = append(props, datastore.Property{Name: k, Value: f})
-			} else if i, ierr := strconv.ParseInt(v, 10, 64); ierr == nil {
-				props = append(props, datastore.Property{Name: k, Value: i})
+			} else if b, ierr := strconv.ParseBool(v); ierr == nil {
+				props = append(props, datastore.Property{Name: k, Value: b})
 			} else {
 				props = append(props, datastore.Property{Name: k, Value: v})
 			}
 		}
+		fmt.Fprintln(w, props)
 		// TODO： multi-add
 		//datastoreKeys = append(datastoreKeys, key)
 		//datastoreProps = append(datastoreProps, props)
