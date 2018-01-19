@@ -132,10 +132,11 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 
 func queryTest(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
-	q := datastore.NewQuery("tsv").Filter("BASE>", 10.0).Order("BASE")
+	q := datastore.NewQuery("Shuxin")
 	t := q.Run(c)
+	fmt.Fprintln(w, t)
 	for {
-		var p interface{}
+		var p datastore.PropertyList
 		_, err := t.Next(&p)
 		if err == datastore.Done {
 			log.Errorf(c, "datastore Done")
@@ -147,7 +148,7 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 		}
 		// Do something with Person p and Key k
 		fmt.Fprintln(w, p)
-		log.Infof(c, p.(string))
+		log.Infof(c, "completed")
 	}
 }
 
