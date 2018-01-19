@@ -36,6 +36,8 @@ func init() {
  * entries to Google Datastore.
 **/
 func csvHandler(w http.ResponseWriter, r *http.Request) {
+	var datastoreKeys []*datastore.Key
+	var datastoreProps []datastore.PropertyList
 	c := appengine.NewContext(r)
 
 	/* start read filename from json */
@@ -93,8 +95,9 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 	if keyerr != nil {
 		println(keyerr.Error())
 	}
-
+	count := 0
 	for {
+		count = count + 1
 		var props datastore.PropertyList
 		vals, err := reader.Read()
 
@@ -119,10 +122,21 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintln(w, props)
 		// TODO： multi-add
-		//datastoreKeys = append(datastoreKeys, key)
-		//datastoreProps = append(datastoreProps, props)
 		key := datastore.NewIncompleteKey(c, entityName, nil)
-		_, err = datastore.Put(c, key, &props)
+		datastoreKeys = append(datastoreKeys, key)
+		datastoreProps = append(datastoreProps, props)
+		if count%300 == 0 {
+			log.Infof(c, strconv.Itoa(count))
+			log.Infof(c, strconv.Itoa(len(datastoreKeys)))
+			_, storeerror := datastore.PutMulti(c, datastoreKeys[count-300:count], datastoreProps[count-300:count])
+			if storeerror != nil {
+				log.Infof(c, storeerror.Error())
+				http.Error(w, storeerror.Error(), 500)
+			}
+
+		}
+
+		//_, err = datastore.Put(c, key, &props)
 		if err != nil {
 			log.Errorf(c, "Datastore Error"+err.Error())
 		}
@@ -132,11 +146,12 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 
 func queryTest(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
-	q := datastore.NewQuery("Shuxin")
+	q := datastore.NewQuery("Shuxin") //.Filter("BASE>", 10.0).Order("BASE")
 	t := q.Run(c)
 	fmt.Fprintln(w, t)
 	for {
 		var p datastore.PropertyList
+		//var props []datastore.Property
 		_, err := t.Next(&p)
 		if err == datastore.Done {
 			log.Errorf(c, "datastore Done")
@@ -147,7 +162,12 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		// Do something with Person p and Key k
-		fmt.Fprintln(` w, p)
+		props, _ := p.Save()
+		fmt.Fprintln(w, props)
+		for _, prop := range props {
+			fmt.Fprintln(w, prop.Name)
+			fmt.Fprintln(w, prop.Value)
+		}
 		log.Infof(c, "completed")
 	}
 }
