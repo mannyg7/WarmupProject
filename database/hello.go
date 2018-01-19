@@ -107,12 +107,10 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 
 		for i, v := range vals {
 			k := asString(keys[i])
-			if i, berr := strconv.ParseInt(v, 10, 64); berr == nil {
+			if i, ierr := strconv.ParseInt(v, 10, 64); ierr == nil {
 				props = append(props, datastore.Property{Name: k, Value: i})
 			} else if f, ferr := strconv.ParseFloat(v, 64); ferr == nil {
 				props = append(props, datastore.Property{Name: k, Value: f})
-			} else if b, ierr := strconv.ParseBool(v); ierr == nil {
-				props = append(props, datastore.Property{Name: k, Value: b})
 			} else {
 				props = append(props, datastore.Property{Name: k, Value: v})
 			}
@@ -124,7 +122,7 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 		key := datastore.NewIncompleteKey(c, entityName, nil)
 		_, err = datastore.Put(c, key, &props)
 		if err != nil {
-			log.Infof(c, "Datastore Error"+err.Error())
+			log.Errorf(c, "Datastore Error"+err.Error())
 		}
 	}
 
@@ -151,7 +149,7 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(b, &f)
 	//log.Infof(c, "body:"+string(b))
 	if err != nil {
-		log.Infof(c, "marshalling: "+err.Error())
+		log.Errorf(c, "marshalling: "+err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
