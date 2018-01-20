@@ -225,16 +225,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}*/
 
 	// unpack json into a map
-	m := asMap(f)
-	log.Debugf(c, "map conv")
+	var m map[string]interface{}
+	m = asMap(f)
 	// headers := m["headers"].(map[string]interface{})
-	body := asMap(m["body"])
-	entityName := asString(body["entity"])
-	columns := asArray(body["columns"])
-	filterConditions := asArray(body["filterCond"])
-	filterValues := asArray(body["filterVal"])
-	order := asString(body["order"])
-	limit := asInt(body["limit"])
+	entityName := asString(m["entity"])
+	columns := asArray(m["columns"])
+	filterConditions := asArray(m["filterCond"])
+	filterValues := asArray(m["filterVal"])
+	order := asString(m["order"])
+	limit := asFloat(m["limit"])
 
 	log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
 	// keys := asArray(body["keys"])
