@@ -254,12 +254,6 @@ func csvHandlerStatic(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func processHandler(w http.ResponseWriter, r *http.Request) {
-	c := appengine.NewContext(r)
-	log.Infof(c, "request")
-
-}
-
 func queryTest(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 	q := datastore.NewQuery("test-csv-types").Order("-b").Limit(2) //.Project("#a", "b") //.Filter("BASE>", 10.0).Order("BASE")
@@ -311,14 +305,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/*{
-		{
-			columns: [columnName1, columnName2...],
-			entity: entityName,
-			filterCond: [],
-			filterVal: [],
-			order: orderRule,
-			limit: limitNumber
-		}
+		columns: [columnName1, columnName2...],
+		entity: entityName,
+		filterCond: [],
+		filterVal: [],
+		order: orderRule,
+		limit: limitNumber
 	}
 	*/
 	// unpack json into a map
@@ -372,7 +364,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	//var propLists []datastore.PropertyList
-	i := q.Run(c)
+	iter := q.Run(c)
 	//fmt.Fprintln(w, i)
 
 	if err != nil {
@@ -383,34 +375,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if cols, ok := m["columns"]; ok {
 		columns := asStringArray(cols)
 		log.Debugf(c, "columns finished")
-		res := saveJSONResponse(i, columns)
+		res := saveJSONResponse(iter, columns)
 		w.Header().Set("content-type", "application/json")
 		w.Write(res)
 	} else {
 		var defaultcols []string
-		res := saveJSONResponse(i, defaultcols)
+		res := saveJSONResponse(iter, defaultcols)
 		w.Header().Set("content-type", "application/json")
 		w.Write(res)
 	}
-
-	//var p datastore.PropertyList
-	//i.Next(&p)
-	//fmt.Fprintln(w, p)
-
-	//output, err := json.Marshal(res)
-	//if err != nil {
-	//	log.Infof(c, "marshalling json")
-	//	http.Error(w, err.Error(), 500)
-	//	return
-	//}
-	//w.Header().Set("content-type", "application/json")
-	//w.Write(res)
-
-	// log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
-
-	// keys := asArray(body["keys"])
-	// vals := asArray(body["values"])
-
 }
 
 /* function to handle json requests DEPRECATED RN */
