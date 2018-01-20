@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -118,7 +119,7 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 				props = append(props, datastore.Property{Name: k, Value: v})
 			}
 		}
-		fmt.Fprintln(w, props)
+		//fmt.Fprintln(w, props)
 		// TODO： multi-add
 		key := datastore.NewIncompleteKey(c, entityName, nil)
 		datastoreKeys = append(datastoreKeys, key)
@@ -261,7 +262,7 @@ func processHandler(w http.ResponseWriter, r *http.Request) {
 
 func queryTest(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
-	q := datastore.NewQuery("test").Order("c") //.Filter("BASE>", 10.0).Order("BASE")
+	q := datastore.NewQuery("test-csv-types").Order("-b").Limit(2) //.Project("#a", "b") //.Filter("BASE>", 10.0).Order("BASE")
 	t := q.Run(c)
 	var listp []datastore.PropertyList
 	for {
@@ -279,7 +280,9 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 		listp = append(listp, p)
 	}
 	//log.Debugf(c, string(saveJSONResponse(listp)))
-	//fmt.Fprintf(w, string(saveJSONResponse(listp)))
+	//fmt.Fprintln(w, listp)
+	//
+	fmt.Fprintln(w, q)
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -332,12 +335,13 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	q := datastore.NewQuery(entityName)
-
-	if cols, ok := m["columns"]; ok {
-		columns := asStringArray(cols)
-		log.Debugf(c, "columns finished")
-		q = q.Project(columns...)
-	}
+	/*
+		if cols, ok := m["columns"]; ok {
+			columns := asStringArray(cols)
+			log.Debugf(c, "columns finished")
+			q = q.Project(columns...)
+		}
+	*/
 
 	if filterCond, ok := m["filterCond"]; ok {
 		if filterVal, ok := m["filterVal"]; ok {
@@ -369,14 +373,29 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	//var propLists []datastore.PropertyList
 	i := q.Run(c)
+	//fmt.Fprintln(w, i)
 
 	if err != nil {
 		log.Errorf(c, "query error: "+err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	if cols, ok := m["columns"]; ok {
+		columns := asStringArray(cols)
+		log.Debugf(c, "columns finished")
+		res := saveJSONResponse(i, columns)
+		w.Header().Set("content-type", "application/json")
+		w.Write(res)
+	} else {
+		var defaultcols []string
+		res := saveJSONResponse(i, defaultcols)
+		w.Header().Set("content-type", "application/json")
+		w.Write(res)
+	}
 
-	res := saveJSONResponse(i, w)
+	//var p datastore.PropertyList
+	//i.Next(&p)
+	//fmt.Fprintln(w, p)
 
 	//output, err := json.Marshal(res)
 	//if err != nil {
@@ -384,18 +403,14 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	//	http.Error(w, err.Error(), 500)
 	//	return
 	//}
-	w.Header().Set("content-type", "application/json")
-<<<<<<< HEAD
-	w.Write(output)
-=======
-	w.Write(res)
+	//w.Header().Set("content-type", "application/json")
+	//w.Write(res)
 
 	// log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
 
 	// keys := asArray(body["keys"])
 	// vals := asArray(body["values"])
 
->>>>>>> d667a8762f7e0020c2b467b761b7e088ebe22e42
 }
 
 /* function to handle json requests DEPRECATED RN */
@@ -556,7 +571,7 @@ func readBlob(c context.Context, fileName string) string {
 }
 
 /* helper function to convert Property array to json object */
-func saveJSONResponse(iter *datastore.Iterator, w http.ResponseWriter) []byte {
+func saveJSONResponse(iter *datastore.Iterator, cols []string) []byte {
 
 	var vals []map[string]interface{}
 	//var res []byte
@@ -573,10 +588,18 @@ func saveJSONResponse(iter *datastore.Iterator, w http.ResponseWriter) []byte {
 			//log.Errorf(c, "fetching next Person: %v", err)
 			break
 		}
+		//fmt.Fprintln(w, p)
 		m := make(map[string]interface{})
+		//HACK: PROJECTION
 		for _, prop := range p {
-			m[prop.Name] = prop.Value
-			fmt.Fprintln(w, prop.Value)
+			if len(cols) != 0 {
+				if i := sort.SearchStrings(cols, prop.Name); i < len(cols) && cols[i] == prop.Name {
+					m[prop.Name] = prop.Value
+					//fmt.Fprintln(w, prop.Value)
+				}
+			} else {
+				m[prop.Name] = prop.Value
+			}
 		}
 		vals = append(vals, m)
 		//listp = append(listp, p)
@@ -595,7 +618,9 @@ func saveJSONResponse(iter *datastore.Iterator, w http.ResponseWriter) []byte {
 			vals = append(vals, m)
 		}
 	*/
-	b, err := json.Marshal(vals)
+	resMap := make(map[string]interface{})
+	resMap["payload"] = vals
+	b, err := json.Marshal(resMap)
 	if err != nil {
 		fmt.Println("error in converting json", err.Error())
 	}
