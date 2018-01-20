@@ -252,12 +252,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if odr, ok := m["order"]; ok {
 		order := asString(odr)
-		q.Order(order)
+		q = q.Order(order)
 	}
 
 	if lmt, ok := m["limit"]; ok {
 		limit := asInt(lmt)
-		q.Limit(limit)
+		q = q.Limit(limit)
 	}
 
 	var propLists []datastore.PropertyList
