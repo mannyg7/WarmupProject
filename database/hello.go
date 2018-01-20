@@ -257,7 +257,8 @@ func csvHandlerStatic(w http.ResponseWriter, r *http.Request) {
 
 func queryTest(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
-	q := datastore.NewQuery("test-csv-types").Order("-b").Limit(2) //.Project("#a", "b") //.Filter("BASE>", 10.0).Order("BASE")
+	// q := datastore.NewQuery("test-csv-types").Order("-b").Limit(2) //.Project("#a", "b") //.Filter("BASE>", 10.0).Order("BASE")
+	q := datastore.NewQuery("tvs").Filter("LAT>=", 10.0).Order("BASE")
 	t := q.Run(c)
 	var listp []datastore.PropertyList
 	for {
@@ -344,7 +345,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			log.Debugf(c, "filter values finished")
 			if len(filterConditions) == len(filterValues) {
 				for i, cond := range filterConditions {
+					fieldName := strings.Split(cond, " ")[0]
+					log.Debugf(c, fieldName)
+					q = q.Order(fieldName)
 					q = q.Filter(cond, filterValues[i])
+					log.Debugf(c, cond)
+					log.Debugf(c, strconv.FormatFloat(filterValues[i], 'f', 5, 64))
 				}
 			} else {
 				log.Errorf(c, "filter condition and filter value length mismatch: "+err.Error())
