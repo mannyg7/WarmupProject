@@ -9,7 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"sort"
+	//"sort"
 	"strconv"
 	"strings"
 
@@ -230,7 +230,7 @@ func csvHandlerStatic(w http.ResponseWriter, r *http.Request) {
 				props = append(props, datastore.Property{Name: k, Value: v})
 			}
 		}
-		fmt.Fprintln(w, props)
+		//fmt.Fprintln(w, props)
 		// TODO： multi-add
 		key := datastore.NewIncompleteKey(c, entityName, nil)
 		datastoreKeys = append(datastoreKeys, key)
@@ -277,7 +277,7 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 	//log.Debugf(c, string(saveJSONResponse(listp)))
 	//fmt.Fprintln(w, listp)
 	//
-	fmt.Fprintln(w, q)
+	//fmt.Fprintln(w, q)
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -366,7 +366,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	//var propLists []datastore.PropertyList
 	iter := q.Run(c)
-	//fmt.Fprintln(w, i)
+	//fmt.Fprintln(w, q)
+	//fmt.Fprintln(w, iter)
 
 	if err != nil {
 		log.Errorf(c, "query error: "+err.Error())
@@ -549,6 +550,7 @@ func saveJSONResponse(iter *datastore.Iterator, cols []string) []byte {
 
 	var vals []map[string]interface{}
 	//var res []byte
+	//fmt.Fprintln(w, cols)
 
 	for {
 		var p datastore.PropertyList
@@ -567,7 +569,9 @@ func saveJSONResponse(iter *datastore.Iterator, cols []string) []byte {
 		//HACK: PROJECTION
 		for _, prop := range p {
 			if len(cols) != 0 {
-				if i := sort.SearchStrings(cols, prop.Name); i < len(cols) && cols[i] == prop.Name {
+
+				if in(prop.Name, cols) {
+					//fmt.Fprintln(w, i, cols[i])
 					m[prop.Name] = prop.Value
 					//fmt.Fprintln(w, prop.Value)
 				}
@@ -642,4 +646,13 @@ func asString(o interface{}) string {
 
 func asBool(o interface{}) bool {
 	return o.(bool)
+}
+
+func in(a string, list []string) bool {
+	for _, b := range list {
+		if b == a {
+			return true
+		}
+	}
+	return false
 }
