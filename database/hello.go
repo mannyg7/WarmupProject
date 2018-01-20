@@ -24,9 +24,7 @@ import (
 func init() {
 	http.HandleFunc("/json", jsonHandler)
 	http.HandleFunc("/csv", csvHandler)
-	// http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/query", queryTest)
-	http.HandleFunc("/query2", queryTest2)
 	http.HandleFunc("/process", queryHandler)
 }
 
@@ -36,6 +34,116 @@ func init() {
  * entries to Google Datastore.
 **/
 func csvHandler(w http.ResponseWriter, r *http.Request) {
+	var datastoreKeys []*datastore.Key
+	var datastoreProps []datastore.PropertyList
+	c := appengine.NewContext(r)
+
+	/* start read filename from json */
+	b, err := ioutil.ReadAll(r.Body)
+	//log.Infof(c, "request closed")
+
+	if err != nil {
+		log.Infof(c, "reading body")
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	/* interface{} is essentially object in Java */
+	var f interface{}
+	// store the json object mapping into f
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		log.Infof(c, "marshalling: "+err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	m := asMap(f)
+	fileName := asString(m["fileName"])
+	entityName := asString(m["entityName"])
+	/* end read filename from json */
+
+	/* start read csv file */
+	// data := readFile(c, fileName)
+	data := readBlob(c, fileName)
+	//data := "a"
+
+	if data == "err" {
+		log.Errorf(c, "Google Storage file read failed\n")
+		return
+	}
+
+	br := bufio.NewReader(strings.NewReader(data))
+	//go csvHelper(r, data, entityName)
+	//t := taskqueue.NewPOSTTask("/csvhandler", url.Values())
+	defer r.Body.Close()
+	/* HACK: assume CSV format to be
+	 * #comment
+	 * #comment
+	 * #key1 key2 key3...
+	 */
+	br.ReadLine()
+	br.ReadLine()
+
+	reader := csv.NewReader(br)
+	reader.Comment = '*'
+	keys, keyerr := reader.Read()
+	// HACK: remove the # in front of first key
+	keys[0] = strings.Split(keys[0], "#")[1]
+	if keyerr != nil {
+		println(keyerr.Error())
+	}
+	count := 0
+	for {
+		count = count + 1
+		var props datastore.PropertyList
+		vals, err := reader.Read()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Errorf(c, "csv read error %s", err.Error())
+			break
+		}
+
+		for i, v := range vals {
+			k := asString(keys[i])
+			if i, ierr := strconv.ParseInt(v, 10, 64); ierr == nil {
+				props = append(props, datastore.Property{Name: k, Value: i})
+			} else if f, ferr := strconv.ParseFloat(v, 64); ferr == nil {
+				props = append(props, datastore.Property{Name: k, Value: f})
+			} else {
+				props = append(props, datastore.Property{Name: k, Value: v})
+			}
+		}
+		fmt.Fprintln(w, props)
+		// TODO： multi-add
+		key := datastore.NewIncompleteKey(c, entityName, nil)
+		datastoreKeys = append(datastoreKeys, key)
+		datastoreProps = append(datastoreProps, props)
+		if count%300 == 0 {
+			log.Infof(c, strconv.Itoa(count))
+			log.Infof(c, strconv.Itoa(len(datastoreKeys)))
+			_, storeerror := datastore.PutMulti(c, datastoreKeys[count-300:count], datastoreProps[count-300:count])
+			if storeerror != nil {
+				log.Infof(c, storeerror.Error())
+				http.Error(w, storeerror.Error(), 500)
+			}
+
+		}
+
+		//_, err = datastore.Put(c, key, &props)
+		if err != nil {
+			log.Errorf(c, "Datastore Error"+err.Error())
+		}
+	}
+	fmt.Fprintln(w, "operation completed")
+
+}
+
+func csvHandlerStatic(w http.ResponseWriter, r *http.Request) {
 	var datastoreKeys []*datastore.Key
 	var datastoreProps []datastore.PropertyList
 	c := appengine.NewContext(r)
@@ -174,13 +282,6 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(saveJSONResponse(listp)))
 }
 
-func queryTest2(w http.ResponseWriter, r *http.Request) {
-	//c := appengine.NewContext(r)
-	//q := datastore.NewQuery("tvs") //.Filter("BASE>", 10.0).Order("BASE")
-	//var propLists []datastore.PropertyList
-	//keys, err := q.GetAll(c, propLists)
-}
-
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 
@@ -279,11 +380,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("content-type", "application/json")
 	w.Write(output)
-
-	// log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
-
-	// keys := asArray(body["keys"])
-	// vals := asArray(body["values"])
 }
 
 /* function to handle json requests DEPRECATED RN */
@@ -399,43 +495,6 @@ func jsonHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("content-type", "application/json")
 	w.Write(output)
-}
-
-/* helper function to read file from Google Storage */
-func readFile(c context.Context, fileName string) string {
-	/* read file from Google Storage*/
-
-	// initialization
-	bucketName, err := file.DefaultBucketName(c)
-	if err != nil {
-		log.Errorf(c, "failed to get default GCS bucket name: %v", err)
-	}
-
-	client, err := storage.NewClient(c)
-	if err != nil {
-		log.Errorf(c, "failed to create client: %v", err)
-		return "err"
-	}
-	defer client.Close()
-
-	bucket := client.Bucket(bucketName)
-
-	rc, err := bucket.Object(fileName).NewReader(c)
-	if err != nil {
-		log.Errorf(c, "readFile: unable to open file from bucket %q, file %q: %v", bucketName, fileName, err)
-		return "err"
-	}
-
-	defer rc.Close()
-
-	slurp, err := ioutil.ReadAll(rc)
-	if err != nil {
-		log.Errorf(c, "readFile: unable to read data from bucket %q, file %q: %v", bucketName, fileName, err)
-		return "err"
-	}
-
-	data := string(slurp[:])
-	return data
 }
 
 /* helper function to read file from Google Storage into blob */
