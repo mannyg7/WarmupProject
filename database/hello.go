@@ -9,7 +9,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	//"net/url"
 	"strconv"
 	"strings"
 
@@ -19,7 +18,6 @@ import (
 	"google.golang.org/appengine/datastore"
 	"google.golang.org/appengine/file"
 	"google.golang.org/appengine/log"
-	//"google.golang.org/appengine/taskqueue"
 )
 
 /* function to set up handlers */
@@ -171,15 +169,6 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		listp = append(listp, p)
-		/* Do something with Person p and Key k
-		props, _ := p.Save()
-		fmt.Fprintln(w, props)
-		for _, prop := range props {
-			fmt.Fprintln(w, prop.Name)
-			fmt.Fprintln(w, prop.Value)
-		}
-		log.Infof(c, "completed")
-		*/
 	}
 	log.Debugf(c, string(saveJSONResponse(listp)))
 	fmt.Fprintf(w, string(saveJSONResponse(listp)))
@@ -244,7 +233,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// vals := asArray(body["values"])
 }
 
-/* function to handle json requests */
+/* function to handle json requests DEPRECATED RN */
 func jsonHandler(w http.ResponseWriter, r *http.Request) {
 	//fmt.Println(r)
 	c := appengine.NewContext(r)
@@ -441,7 +430,6 @@ func readBlob(c context.Context, fileName string) string {
 /* helper function to convert Property array to json object */
 func saveJSONResponse(propsList []datastore.PropertyList) []byte {
 
-	//var keys []string
 	var vals []map[string]interface{}
 	var res []byte
 	if len(propsList) < 1 {
@@ -449,29 +437,17 @@ func saveJSONResponse(propsList []datastore.PropertyList) []byte {
 		return (res)
 	}
 
-	/*var rawRes []map[string]interface{}
-	sampleProp := propsList[0]
-
-	for _, keyProp := range sampleProp {
-		keys = append(keys, keyProp.Name)
-	}
-	*/
 	for _, props := range propsList {
 		m := make(map[string]interface{})
-		//m := make(map[string]interface{})
-		//var entryVals []interface{}
 		for _, prop := range props {
 			m[prop.Name] = prop.Value
-			//m[asString(prop.Name)] = prop.Value
 		}
 		vals = append(vals, m)
-		//rawRes = append(rawRes, m)
 	}
 	b, err := json.Marshal(vals)
 	if err != nil {
 		fmt.Println("error in converting json", err.Error())
 	}
-
 	return b
 }
 
