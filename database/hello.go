@@ -29,6 +29,7 @@ func init() {
 	// http.HandleFunc("/query", queryHandler)
 	http.HandleFunc("/query", queryTest)
 	http.HandleFunc("/query2", queryTest2)
+	http.HandleFunc("/process", queryHandler)
 }
 
 /* function to add csv file to datastore.
@@ -142,6 +143,13 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 			log.Errorf(c, "Datastore Error"+err.Error())
 		}
 	}
+	fmt.Fprintln(w, "operation completed")
+
+}
+
+func processHandler(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+	log.Infof(c, "request")
 
 }
 
@@ -174,21 +182,22 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 }
 
 func queryTest2(w http.ResponseWriter, r *http.Request) {
-	c := appengine.NewContext(r)
-	q := datastore.NewQuery("tvs") //.Filter("BASE>", 10.0).Order("BASE")
-	var propLists []datastore.PropertyList
-	keys, err := q.GetAll(c, propLists)
+	//c := appengine.NewContext(r)
+	//q := datastore.NewQuery("tvs") //.Filter("BASE>", 10.0).Order("BASE")
+	//var propLists []datastore.PropertyList
+	//keys, err := q.GetAll(c, propLists)
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
-	log.Infof(c, "request")
 
 	// Read body from request into variable b
+	log.Debugf(c, "reading body")
 	b, err := ioutil.ReadAll(r.Body)
-	r.Body.Close()
+	log.Debugf(c, "Finished reading:"+string(b))
+	defer r.Body.Close()
 	if err != nil {
-		log.Infof(c, "reading body")
+		log.Errorf(c, "reading body error: "+err.Error())
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -197,7 +206,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	var f interface{}
 	// store the json object mapping into f
 	err = json.Unmarshal(b, &f)
-	//log.Infof(c, "body:"+string(b))
+	log.Debugf(c, "finished unmarshalling")
 	if err != nil {
 		log.Errorf(c, "marshalling: "+err.Error())
 		http.Error(w, err.Error(), 500)
@@ -205,30 +214,36 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	/*{
-		headers (optional) {...},
-		body: {
-			entityName: string,
-			keys: [key1,key2,...,key],
-			values: [
-				[val1, val2, val3...],
-				[val1, val2, val3...]
-			]
+		{
+			columns: [columnName1, columnName2...],
+			entity: entityName,
+			filterCond: [],
+			filterVal: [],
+			order: orderRule,
+			limit: limitNumber
 		}
 	}*/
 
 	// unpack json into a map
 	m := asMap(f)
+	log.Debugf(c, "map conv")
 	// headers := m["headers"].(map[string]interface{})
 	body := asMap(m["body"])
-	entityName := asString(body["entityName"])
-	log.Infof(c, entityName)
+	entityName := asString(body["entity"])
+	columns := asArray(body["columns"])
+	filterConditions := asArray(body["filterCond"])
+	filterValues := asArray(body["filterVal"])
+	order := asString(body["order"])
+	limit := asInt(body["limit"])
+
+	log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
 	// keys := asArray(body["keys"])
 	// vals := asArray(body["values"])
 }
 
 /* function to handle json requests */
 func jsonHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r)
+	//fmt.Println(r)
 	c := appengine.NewContext(r)
 	log.Infof(c, "request")
 
@@ -420,17 +435,39 @@ func readBlob(c context.Context, fileName string) string {
 	return data
 }
 
+type Res struct {
+	Keys   []string
+	Values [][]interface{}
+}
+
 /* helper function to convert Property array to json object */
-func saveJSONResponse(props []datastore.PropertyList) []byte {
+func saveJSONResponse(propsList []datastore.PropertyList) []byte {
 	var keys []string
 	var vals [][]interface{}
-	m := make(map[string]interface{})
-	for _, prop := range props {
-		m[asString(prop.Name)] = prop.Value
+	var res []byte
+	if len(propsList) < 1 {
+		res[0] = byte('0')
+		return (res)
 	}
-	b, err := json.Marshal(m)
+	//var rawRes []map[string]interface{}
+	sampleProp := propsList[0]
+	for _, keyProp := range sampleProp {
+		keys = append(keys, keyProp.Name)
+	}
+	for _, props := range propsList {
+		//m := make(map[string]interface{})
+		var entryVals []interface{}
+		for _, prop := range props {
+			entryVals = append(entryVals, prop.Value)
+			//m[asString(prop.Name)] = prop.Value
+		}
+		vals = append(vals, entryVals)
+		//rawRes = append(rawRes, m)
+	}
+	response := Res{Keys: keys, Values: vals}
+	b, err := json.Marshal(response)
 	if err != nil {
-		fmt.Println("error in converting json")
+		fmt.Println("error in converting json", err.Error())
 	}
 	return b
 }
