@@ -220,15 +220,68 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// unpack json into a map
 	var m map[string]interface{}
 	m = asMap(f)
-	// headers := m["headers"].(map[string]interface{})
-	entityName := asString(m["entity"])
-	columns := asArray(m["columns"])
-	filterConditions := asArray(m["filterCond"])
-	filterValues := asArray(m["filterVal"])
-	order := asString(m["order"])
-	limit := asFloat(m["limit"])
+	var entityName string
+	if entity, ok := m["entity"]; ok {
+		entityName = asString(entity)
+	} else {
+		log.Errorf(c, "missing entityName: "+err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
-	log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
+	q := datastore.NewQuery(entityName)
+
+	if cols, ok := m["columns"]; ok {
+		columns := asStringArray(cols)
+		q = q.Project(columns...)
+	}
+
+	if filterCond, ok := m["filterCond"]; ok {
+		if filterVal, ok := m["filterVal"]; ok {
+			filterConditions := asStringArray(filterCond)
+			filterValues := asFloatArray(filterVal)
+			if len(filterConditions) == len(filterValues) {
+				for i, cond := range filterConditions {
+					q = q.Filter(cond, filterValues[i])
+				}
+			} else {
+				log.Errorf(c, "filter condition and filter value length mismatch: "+err.Error())
+			}
+		}
+	}
+
+	if odr, ok := m["order"]; ok {
+		order := asString(odr)
+		q.Order(order)
+	}
+
+	if lmt, ok := m["limit"]; ok {
+		limit := asInt(lmt)
+		q.Limit(limit)
+	}
+
+	var propLists []datastore.PropertyList
+	_, err = q.GetAll(c, propLists)
+
+	if err != nil {
+		log.Errorf(c, "query error: "+err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	res := saveJSONResponse(propLists)
+
+	output, err := json.Marshal(res)
+	if err != nil {
+		log.Infof(c, "marshalling json")
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	w.Header().Set("content-type", "application/json")
+	w.Write(output)
+
+	// log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
+
 	// keys := asArray(body["keys"])
 	// vals := asArray(body["values"])
 }
@@ -458,6 +511,14 @@ func asMap(o interface{}) map[string]interface{} {
 
 func asArray(o interface{}) []interface{} {
 	return o.([]interface{})
+}
+
+func asStringArray(o interface{}) []string {
+	return o.([]string)
+}
+
+func asFloatArray(o interface{}) []float64 {
+	return o.([]float64)
 }
 
 func asInt(o interface{}) int {
