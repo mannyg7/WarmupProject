@@ -278,8 +278,8 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 		}
 		listp = append(listp, p)
 	}
-	log.Debugf(c, string(saveJSONResponse(listp)))
-	fmt.Fprintf(w, string(saveJSONResponse(listp)))
+	//log.Debugf(c, string(saveJSONResponse(listp)))
+	//fmt.Fprintf(w, string(saveJSONResponse(listp)))
 }
 
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -316,14 +316,15 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			order: orderRule,
 			limit: limitNumber
 		}
-	}*/
-
+	}
+	*/
 	// unpack json into a map
 	var m map[string]interface{}
 	m = asMap(f)
 	var entityName string
 	if entity, ok := m["entity"]; ok {
 		entityName = asString(entity)
+		log.Debugf(c, "entity name finished")
 	} else {
 		log.Errorf(c, "missing entityName: "+err.Error())
 		http.Error(w, err.Error(), 500)
@@ -334,13 +335,16 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if cols, ok := m["columns"]; ok {
 		columns := asStringArray(cols)
+		log.Debugf(c, "columns finished")
 		q = q.Project(columns...)
 	}
 
 	if filterCond, ok := m["filterCond"]; ok {
 		if filterVal, ok := m["filterVal"]; ok {
 			filterConditions := asStringArray(filterCond)
+			log.Debugf(c, "filter conditions finished")
 			filterValues := asFloatArray(filterVal)
+			log.Debugf(c, "filter values finished")
 			if len(filterConditions) == len(filterValues) {
 				for i, cond := range filterConditions {
 					q = q.Filter(cond, filterValues[i])
@@ -353,16 +357,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	if odr, ok := m["order"]; ok {
 		order := asString(odr)
+		log.Debugf(c, "order finished")
 		q = q.Order(order)
 	}
 
 	if lmt, ok := m["limit"]; ok {
-		limit := asInt(lmt)
+		limit := int(asFloat(lmt))
+		log.Debugf(c, "limit finished")
 		q = q.Limit(limit)
 	}
 
-	var propLists []datastore.PropertyList
-	_, err = q.GetAll(c, propLists)
+	//var propLists []datastore.PropertyList
+	i := q.Run(c)
 
 	if err != nil {
 		log.Errorf(c, "query error: "+err.Error())
@@ -370,16 +376,26 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := saveJSONResponse(propLists)
+	res := saveJSONResponse(i, w)
 
-	output, err := json.Marshal(res)
-	if err != nil {
-		log.Infof(c, "marshalling json")
-		http.Error(w, err.Error(), 500)
-		return
-	}
+	//output, err := json.Marshal(res)
+	//if err != nil {
+	//	log.Infof(c, "marshalling json")
+	//	http.Error(w, err.Error(), 500)
+	//	return
+	//}
 	w.Header().Set("content-type", "application/json")
+<<<<<<< HEAD
 	w.Write(output)
+=======
+	w.Write(res)
+
+	// log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
+
+	// keys := asArray(body["keys"])
+	// vals := asArray(body["values"])
+
+>>>>>>> d667a8762f7e0020c2b467b761b7e088ebe22e42
 }
 
 /* function to handle json requests DEPRECATED RN */
@@ -540,22 +556,45 @@ func readBlob(c context.Context, fileName string) string {
 }
 
 /* helper function to convert Property array to json object */
-func saveJSONResponse(propsList []datastore.PropertyList) []byte {
+func saveJSONResponse(iter *datastore.Iterator, w http.ResponseWriter) []byte {
 
 	var vals []map[string]interface{}
-	var res []byte
-	if len(propsList) < 1 {
-		res[0] = byte('0')
-		return (res)
-	}
+	//var res []byte
 
-	for _, props := range propsList {
+	for {
+		var p datastore.PropertyList
+		//var props []datastore.Property
+		_, err := iter.Next(&p)
+		if err == datastore.Done {
+			//log.Errorf(c, "datastore Done")
+			break // No further entities match the query.
+		}
+		if err != nil {
+			//log.Errorf(c, "fetching next Person: %v", err)
+			break
+		}
 		m := make(map[string]interface{})
-		for _, prop := range props {
+		for _, prop := range p {
 			m[prop.Name] = prop.Value
+			fmt.Fprintln(w, prop.Value)
 		}
 		vals = append(vals, m)
+		//listp = append(listp, p)
 	}
+
+	//if len(propsList) < 1 {
+	//	res[0] = byte('0')
+	//	return (res)
+	//}
+	/*
+		for _, props := range propsList {
+			m := make(map[string]interface{})
+			for _, prop := range props {
+				m[prop.Name] = prop.Value
+			}
+			vals = append(vals, m)
+		}
+	*/
 	b, err := json.Marshal(vals)
 	if err != nil {
 		fmt.Println("error in converting json", err.Error())
