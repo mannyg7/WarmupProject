@@ -514,11 +514,21 @@ func asArray(o interface{}) []interface{} {
 }
 
 func asStringArray(o interface{}) []string {
-	return o.([]string)
+	t := asArray(o)
+	s := make([]string, len(t))
+	for i, v := range t {
+		s[i] = fmt.Sprint(v)
+	}
+	return s
 }
 
 func asFloatArray(o interface{}) []float64 {
-	return o.([]float64)
+	t := asArray(o)
+	s := make([]float64, len(t))
+	for i, v := range t {
+		s[i] = asFloat(v)
+	}
+	return s
 }
 
 func asInt(o interface{}) int {
