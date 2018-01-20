@@ -227,15 +227,21 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	// unpack json into a map
 	var m map[string]interface{}
 	m = asMap(f)
-	// headers := m["headers"].(map[string]interface{})
-	entityName := asString(m["entity"])
-	columns := asArray(m["columns"])
+	var entityName string
+	if val, ok := m["entity"]; ok {
+		entityName = asString(val)
+	}
+	var columns []string
+	if val, ok := m["columns"]; ok {
+		columns = asArray(val)
+	}
 	filterConditions := asArray(m["filterCond"])
 	filterValues := asArray(m["filterVal"])
 	order := asString(m["order"])
 	limit := asFloat(m["limit"])
 
 	log.Infof(c, entityName, columns, filterConditions, filterValues, order, limit)
+
 	// keys := asArray(body["keys"])
 	// vals := asArray(body["values"])
 }
@@ -478,6 +484,10 @@ func asMap(o interface{}) map[string]interface{} {
 
 func asArray(o interface{}) []interface{} {
 	return o.([]interface{})
+}
+
+func asStringArray(o interface{}) []string {
+	return o.([]string)
 }
 
 func asInt(o interface{}) int {
