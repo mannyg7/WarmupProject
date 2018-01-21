@@ -35,6 +35,13 @@ func init() {
  * entries to Google Datastore.
 **/
 func csvHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("content-type", "application/json")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
+	w.Header().Set("content-type", "application/json")
+
 	var datastoreKeys []*datastore.Key
 	var datastoreProps []datastore.PropertyList
 	c := appengine.NewContext(r)
@@ -147,6 +154,13 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func csvHandlerStatic(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("content-type", "application/json")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
+	w.Header().Set("content-type", "application/json")
+
 	var datastoreKeys []*datastore.Key
 	var datastoreProps []datastore.PropertyList
 	c := appengine.NewContext(r)
@@ -402,6 +416,13 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 /* function to handle json requests DEPRECATED RN */
 func jsonHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("content-type", "application/json")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
+	w.Header().Set("content-type", "application/json")
+
 	//fmt.Println(r)
 	c := appengine.NewContext(r)
 	log.Infof(c, "request")
