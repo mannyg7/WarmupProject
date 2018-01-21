@@ -284,6 +284,13 @@ func queryTest(w http.ResponseWriter, r *http.Request) {
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("content-type", "application/json")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
+	w.Header().Set("content-type", "application/json")
+
 	// Read body from request into variable b
 	log.Debugf(c, "reading body")
 	b, err := ioutil.ReadAll(r.Body)
@@ -384,16 +391,12 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		columns := asStringArray(cols)
 		log.Debugf(c, "columns finished")
 		res := saveJSONResponse(iter, columns)
-		w.Header().Set("content-type", "application/json")
 		w.Write(res)
 	} else {
 		var defaultcols []string
 		res := saveJSONResponse(iter, defaultcols)
-		w.Header().Set("content-type", "application/json")
 		w.Write(res)
 	}
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.Header().Add("content-type", "application/json")
 }
 
 /* function to handle json requests DEPRECATED RN */
