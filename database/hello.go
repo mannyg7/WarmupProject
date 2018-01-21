@@ -34,11 +34,9 @@ func init() {
 **/
 func csvHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.Header().Add("content-type", "application/json")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
 	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
-	w.Header().Set("content-type", "application/json")
 
 	var datastoreKeys []*datastore.Key
 	var datastoreProps []datastore.PropertyList
