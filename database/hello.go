@@ -393,6 +393,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		w.Write(res)
 	}
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("content-type", "application/json")
 }
 
 /* function to handle json requests DEPRECATED RN */
