@@ -221,12 +221,14 @@ func csvHandlerStatic(w http.ResponseWriter, r *http.Request) {
 		println(keyerr.Error())
 	}
 	count := 0
+	prevCount := 0
 	for {
 		count = count + 1
 		var props datastore.PropertyList
 		vals, err := reader.Read()
 
 		if err == io.EOF {
+			datastore.PutMulti(c, datastoreKeys[prevCount:], datastoreProps[prevCount:])
 			break
 		}
 
@@ -253,7 +255,8 @@ func csvHandlerStatic(w http.ResponseWriter, r *http.Request) {
 		if count%300 == 0 {
 			log.Infof(c, strconv.Itoa(count))
 			log.Infof(c, strconv.Itoa(len(datastoreKeys)))
-			_, storeerror := datastore.PutMulti(c, datastoreKeys[count-300:count], datastoreProps[count-300:count])
+			_, storeerror := datastore.PutMulti(c, datastoreKeys[prevCount:count], datastoreProps[prevCount:count])
+			prevCount = count
 			if storeerror != nil {
 				log.Infof(c, storeerror.Error())
 				http.Error(w, storeerror.Error(), 500)
