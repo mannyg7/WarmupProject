@@ -54,6 +54,7 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 	// store the json object mapping into f
 	err = json.Unmarshal(b, &f)
 	if err != nil {
+		log.Debugf(c, string(b))
 		log.Infof(c, "marshalling: "+err.Error())
 		http.Error(w, err.Error(), 500)
 		return
@@ -567,6 +568,7 @@ func saveJSONResponse(iter *datastore.Iterator, cols []string) []byte {
 		var p datastore.PropertyList
 		//var props []datastore.Property
 		_, err := iter.Next(&p)
+
 		if err == datastore.Done {
 			//log.Errorf(c, "datastore Done")
 			break // No further entities match the query.
