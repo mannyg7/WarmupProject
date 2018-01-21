@@ -23,7 +23,6 @@ import (
 
 /* function to set up handlers */
 func init() {
-	http.HandleFunc("/json", jsonHandler)
 	http.HandleFunc("/csv", csvHandler)
 	http.HandleFunc("/query", queryTest)
 	http.HandleFunc("/process", queryHandler)
@@ -408,135 +407,18 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	if cols, ok := m["columns"]; ok {
 		columns := asStringArray(cols)
 		log.Debugf(c, "columns finished")
-		res := saveJSONResponse(iter, columns)
-		w.Write(res)
+		if n, ok := m["entityName"]; ok {
+			res := saveJSONResponse(c, iter, columns, asString(n))
+			w.Write(res)
+		}
+
 	} else {
 		var defaultcols []string
-		res := saveJSONResponse(iter, defaultcols)
-		w.Write(res)
-	}
-}
-
-/* function to handle json requests DEPRECATED RN */
-func jsonHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.Header().Add("content-type", "application/json")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
-	w.Header().Set("content-type", "application/json")
-
-	//fmt.Println(r)
-	c := appengine.NewContext(r)
-	log.Infof(c, "request")
-
-	// Read body from request into variable b
-	b, err := ioutil.ReadAll(r.Body)
-	r.Body.Close()
-	if err != nil {
-		log.Infof(c, "reading body")
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	/* interface{} is essentially object in Java */
-	var f interface{}
-	// store the json object mapping into f
-	err = json.Unmarshal(b, &f)
-	//log.Infof(c, "body:"+string(b))
-	if err != nil {
-		log.Errorf(c, "marshalling: "+err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	/*{
-		headers (optional) {...},
-		body: {
-			entityName: string,
-			keys: [key1,key2,...,key],
-			values: [
-				[val1, val2, val3...],
-				[val1, val2, val3...]
-			]
+		if n, ok := m["entityName"]; ok {
+			res := saveJSONResponse(c, iter, defaultcols, asString(n))
+			w.Write(res)
 		}
-	}*/
-
-	// unpack json into a map
-	m := asMap(f)
-	// headers := m["headers"].(map[string]interface{})
-	body := asMap(m["body"])
-	entityName := asString(body["entityName"])
-	log.Infof(c, entityName)
-	keys := asArray(body["keys"])
-	vals := asArray(body["values"])
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
 	}
-	count := 0
-	var datastoreKeys []*datastore.Key
-	var datastoreProps []datastore.PropertyList
-
-	// loop through each entry in payload
-	for _, val := range vals {
-		var props datastore.PropertyList
-		vSet := asArray(val)
-		count = count + 1
-		// loop through each key-value pair in each entry
-		for i, v := range vSet {
-			k := asString(keys[i])
-			//log.Infof(c, k)
-			switch v.(type) {
-			case string:
-				//log.Infof(c, asString(v))
-				props = append(props, datastore.Property{Name: k, Value: asString(v)})
-			case float64:
-				//log.Infof(c, strconv.FormatFloat(asFloat(v), 'f', 5, 64))
-				props = append(props, datastore.Property{Name: k, Value: asFloat(v)})
-			case int:
-				//log.Infof(c, strconv.FormatInt(v.(int64), 10))
-				props = append(props, datastore.Property{Name: k, Value: asInt(v)})
-			case bool:
-				//log.Infof(c, strconv.FormatBool(v.(bool)))
-				props = append(props, datastore.Property{Name: k, Value: v.(bool)})
-			default:
-				fmt.Println(k, "is of a type I don't know how to handle")
-			}
-		}
-		key := datastore.NewIncompleteKey(c, entityName, nil)
-		/* ----SINGLE PUT-------*/
-		/*
-			_, errrr := datastore.Put(c, key, &props)
-			if errrr != nil {
-				log.Infof(c, "ERRRRR!"+errrr.Error())
-			}
-		*/
-		datastoreKeys = append(datastoreKeys, key)
-		datastoreProps = append(datastoreProps, props)
-
-		if count%300 == 0 {
-			log.Infof(c, strconv.Itoa(count))
-			log.Infof(c, strconv.Itoa(len(datastoreKeys)))
-			_, storeerror := datastore.PutMulti(c, datastoreKeys[count-300:count], datastoreProps[count-300:count])
-			if storeerror != nil {
-				log.Infof(c, storeerror.Error())
-				http.Error(w, storeerror.Error(), 500)
-			}
-
-		}
-
-	}
-
-	output, err := json.Marshal(f)
-	if err != nil {
-		log.Infof(c, "marshalling json")
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	w.Header().Set("content-type", "application/json")
-	w.Write(output)
 }
 
 /* helper function to read file from Google Storage into blob */
@@ -582,7 +464,7 @@ func readBlob(c context.Context, fileName string) string {
 }
 
 /* helper function to convert Property array to json object */
-func saveJSONResponse(iter *datastore.Iterator, cols []string) []byte {
+func saveJSONResponse(c context.Context, iter *datastore.Iterator, cols []string, entName string) []byte {
 
 	var vals []map[string]interface{}
 	//var res []byte
@@ -590,6 +472,7 @@ func saveJSONResponse(iter *datastore.Iterator, cols []string) []byte {
 
 	for {
 		var p datastore.PropertyList
+		var propToWrite datastore.PropertyList
 		//var props []datastore.Property
 		_, err := iter.Next(&p)
 
@@ -603,11 +486,14 @@ func saveJSONResponse(iter *datastore.Iterator, cols []string) []byte {
 		}
 		//fmt.Fprintln(w, p)
 		m := make(map[string]interface{})
+
 		//HACK: PROJECTION
 		for _, prop := range p {
+
 			if len(cols) != 0 {
 
 				if in(prop.Name, cols) {
+					propToWrite = append(propToWrite, prop)
 					//fmt.Fprintln(w, i, cols[i])
 					m[prop.Name] = prop.Value
 					//fmt.Fprintln(w, prop.Value)
@@ -617,6 +503,11 @@ func saveJSONResponse(iter *datastore.Iterator, cols []string) []byte {
 			}
 		}
 		vals = append(vals, m)
+		key := datastore.NewIncompleteKey(c, entName, nil)
+		_, e := datastore.Put(c, key, &propToWrite)
+		if e != nil {
+			log.Errorf(c, "datastore error: "+e.Error())
+		}
 		//listp = append(listp, p)
 	}
 
