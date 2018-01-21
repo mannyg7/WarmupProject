@@ -1,0 +1,24 @@
+<html>
+    <head>
+            <script   src="https://code.jquery.com/jquery-3.3.1.min.js"   integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="   crossorigin="anonymous"></script>
+    </head>
+    <script>
+        var data = {
+            "entity": "tvs",
+            "columns": ["LAT", "BASE", "LON"],
+            "filterCond": ["LAT >"],
+            "filterVal": [10.0],
+            "order": "LAT"
+        }
+
+        console.log("logging local")
+        console.log(data)
+
+        var url = "https://comp410s18-fb-storage-test.appspot.com/process"
+
+        $.post(url, JSON.stringify(data), function(res) {
+            console.log("loading response")
+            console.log(res)
+        });
+    </script>
+</html>
