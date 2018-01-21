@@ -24,7 +24,6 @@ import (
 /* function to set up handlers */
 func init() {
 	http.HandleFunc("/csv", csvHandler)
-	http.HandleFunc("/query", queryTest)
 	http.HandleFunc("/process", queryHandler)
 }
 
@@ -152,155 +151,11 @@ func csvHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func csvHandlerStatic(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.Header().Add("content-type", "application/json")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
-	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
-	w.Header().Set("content-type", "application/json")
-
-	var datastoreKeys []*datastore.Key
-	var datastoreProps []datastore.PropertyList
-	c := appengine.NewContext(r)
-
-	/* start read filename from json */
-	b, err := ioutil.ReadAll(r.Body)
-	//log.Infof(c, "request closed")
-
-	if err != nil {
-		log.Infof(c, "reading body")
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	/* interface{} is essentially object in Java */
-	var f interface{}
-	// store the json object mapping into f
-	err = json.Unmarshal(b, &f)
-	if err != nil {
-		log.Infof(c, "marshalling: "+err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	m := asMap(f)
-	fileName := asString(m["fileName"])
-	entityName := asString(m["entityName"])
-	/* end read filename from json */
-
-	/* start read csv file */
-	// data := readFile(c, fileName)
-	data := readBlob(c, fileName)
-	//data := "a"
-
-	if data == "err" {
-		log.Errorf(c, "Google Storage file read failed\n")
-		return
-	}
-
-	br := bufio.NewReader(strings.NewReader(data))
-	//go csvHelper(r, data, entityName)
-	//t := taskqueue.NewPOSTTask("/csvhandler", url.Values())
-	defer r.Body.Close()
-	/* HACK: assume CSV format to be
-	 * #comment
-	 * #comment
-	 * #key1 key2 key3...
-	 */
-	br.ReadLine()
-	br.ReadLine()
-
-	reader := csv.NewReader(br)
-	reader.Comment = '*'
-	keys, keyerr := reader.Read()
-	// HACK: remove the # in front of first key
-	keys[0] = strings.Split(keys[0], "#")[1]
-	if keyerr != nil {
-		println(keyerr.Error())
-	}
-	count := 0
-	prevCount := 0
-	for {
-		count = count + 1
-		var props datastore.PropertyList
-		vals, err := reader.Read()
-
-		if err == io.EOF {
-			datastore.PutMulti(c, datastoreKeys[prevCount:], datastoreProps[prevCount:])
-			break
-		}
-
-		if err != nil {
-			log.Errorf(c, "csv read error %s", err.Error())
-			break
-		}
-
-		for i, v := range vals {
-			k := asString(keys[i])
-			if i, ierr := strconv.ParseInt(v, 10, 64); ierr == nil {
-				props = append(props, datastore.Property{Name: k, Value: i})
-			} else if f, ferr := strconv.ParseFloat(v, 64); ferr == nil {
-				props = append(props, datastore.Property{Name: k, Value: f})
-			} else {
-				props = append(props, datastore.Property{Name: k, Value: v})
-			}
-		}
-		//fmt.Fprintln(w, props)
-		// TODO： multi-add
-		key := datastore.NewIncompleteKey(c, entityName, nil)
-		datastoreKeys = append(datastoreKeys, key)
-		datastoreProps = append(datastoreProps, props)
-		if count%300 == 0 {
-			log.Infof(c, strconv.Itoa(count))
-			log.Infof(c, strconv.Itoa(len(datastoreKeys)))
-			_, storeerror := datastore.PutMulti(c, datastoreKeys[prevCount:count], datastoreProps[prevCount:count])
-			prevCount = count
-			if storeerror != nil {
-				log.Infof(c, storeerror.Error())
-				http.Error(w, storeerror.Error(), 500)
-			}
-
-		}
-
-		//_, err = datastore.Put(c, key, &props)
-		if err != nil {
-			log.Errorf(c, "Datastore Error"+err.Error())
-		}
-	}
-	fmt.Fprintln(w, "operation completed")
-
-}
-
-func queryTest(w http.ResponseWriter, r *http.Request) {
-	c := appengine.NewContext(r)
-	// q := datastore.NewQuery("test-csv-types").Order("-b").Limit(2) //.Project("#a", "b") //.Filter("BASE>", 10.0).Order("BASE")
-	q := datastore.NewQuery("tvs").Filter("LAT>=", 10.0).Order("BASE")
-	t := q.Run(c)
-	var listp []datastore.PropertyList
-	for {
-		var p datastore.PropertyList
-		//var props []datastore.Property
-		_, err := t.Next(&p)
-		if err == datastore.Done {
-			log.Errorf(c, "datastore Done")
-			break // No further entities match the query.
-		}
-		if err != nil {
-			log.Errorf(c, "fetching next Person: %v", err)
-			break
-		}
-		listp = append(listp, p)
-	}
-	//log.Debugf(c, string(saveJSONResponse(listp)))
-	//fmt.Fprintln(w, listp)
-	//
-	//fmt.Fprintln(w, q)
-}
-
+/* function to handle query request from user */
 func queryHandler(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 
+	/* headers to allow CORS */
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	w.Header().Add("content-type", "application/json")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -404,6 +259,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
 	if cols, ok := m["columns"]; ok {
 		columns := asStringArray(cols)
 		log.Debugf(c, "columns finished")
@@ -411,7 +267,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 			res := saveJSONResponse(c, iter, columns, asString(n))
 			w.Write(res)
 		}
-
 	} else {
 		var defaultcols []string
 		if n, ok := m["entityName"]; ok {
@@ -438,9 +293,6 @@ func readBlob(c context.Context, fileName string) string {
 	}
 	defer client.Close()
 
-	// bucket := client.Bucket(bucketName)
-
-	// rc, err := bucket.Object(fileName).NewReader(c)
 	path := "/gs/" + bucketName + "/" + fileName
 	blobKey, err := blobstore.BlobKeyForFile(c, path)
 	blobReader := blobstore.NewReader(c, blobKey)
@@ -451,9 +303,6 @@ func readBlob(c context.Context, fileName string) string {
 		return "err"
 	}
 
-	// defer rc.Close()
-
-	// slurp, err := ioutil.ReadAll(rc)
 	if err != nil {
 		log.Errorf(c, "readFile: unable to read data from bucket %q, file %q: %v", bucketName, fileName, err)
 		return "err"
@@ -502,6 +351,7 @@ func saveJSONResponse(c context.Context, iter *datastore.Iterator, cols []string
 				m[prop.Name] = prop.Value
 			}
 		}
+		// save processed data to datastore
 		vals = append(vals, m)
 		key := datastore.NewIncompleteKey(c, entName, nil)
 		_, e := datastore.Put(c, key, &propToWrite)
@@ -583,4 +433,14 @@ func in(a string, list []string) bool {
 		}
 	}
 	return false
+}
+
+func str2int(s string) int {
+	i, _ := strconv.ParseInt(s, 10, 64)
+	return int(i)
+}
+
+func str2float(s string) float64 {
+	f, _ := strconv.ParseFloat(s, 64)
+	return f
 }
