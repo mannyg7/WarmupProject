@@ -2,6 +2,7 @@ package hello
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/csv"
 	"encoding/json"
@@ -27,6 +28,7 @@ func init() {
 	http.HandleFunc("/process", queryHandler)
 	http.HandleFunc("/blob", blobHandler)
 	http.HandleFunc("/upload", uploadHandler)
+	http.HandleFunc("/download", downloadHandler)
 }
 
 /* function to add csv file to datastore.
@@ -220,6 +222,84 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, data)
 	log.Debugf(ctx, data)
 
+}
+
+func downloadHandler(w http.ResponseWriter, r *http.Request) {
+	c := appengine.NewContext(r)
+
+	/* start read filename from json */
+	b, err := ioutil.ReadAll(r.Body)
+
+	if err != nil {
+		log.Infof(c, "reading body")
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	/* interface{} is essentially object in Java */
+	var f interface{}
+	// store the json object mapping into f
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		log.Debugf(c, string(b))
+		log.Infof(c, "marshalling: "+err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	m := asMap(f)
+
+	entityName := asString(m["entityName"])
+
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Add("content-type", "application/json")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
+	w.Header().Set("Content-Type", "text/csv") // setting the content type header to text/csv
+	w.Header().Set("Content-Disposition", "attachment;filename=TheCSVFileName.csv")
+
+	br := &bytes.Buffer{}   // creates IO Writer
+	wr := csv.NewWriter(br) // creates a csv writer that uses the io buffer.
+
+	q := datastore.NewQuery(entityName)
+
+	iter := q.Run(c)
+
+	var key2index map[string]int
+	var csvKeys []string
+
+	for {
+		var p datastore.PropertyList
+
+		_, err := iter.Next(&p)
+
+		if err == datastore.Done {
+			break // No further entities match the query.
+		}
+		if err != nil {
+			break
+		}
+
+		if len(key2index) == 0 {
+			key2index = mapKey2Index(p)
+		}
+
+		if len(csvKeys) == 0 {
+			csvKeys = getCSVKeys(key2index)
+			wr.Write(csvKeys)
+		}
+
+		row := propList2String(p, key2index)
+		wr.Write(row)
+	}
+
+	// for i := 0; i < 100; i++ { // make a loop for 100 rows just for testing purposes
+	// 	wr.Write(record) // converts array of string to comma seperated values for 1 row.
+	// }
+	wr.Flush() // writes the csv writer data to the buffered data io writer(b(bytes.buffer))
+
+	w.Write(br.Bytes())
 }
 
 /* function to handle query request from user */
@@ -588,4 +668,45 @@ func str2int(s string) int {
 func str2float(s string) float64 {
 	f, _ := strconv.ParseFloat(s, 64)
 	return f
+}
+
+/* given a property list, return a mapping from key name to index */
+func mapKey2Index(plist datastore.PropertyList) map[string]int {
+	m := make(map[string]int)
+	for i, prop := range plist {
+		m[prop.Name] = i
+	}
+	return m
+}
+
+/* given a map from key name to index, return an array of string indicating CSV keys */
+func getCSVKeys(m map[string]int) []string {
+	record := make([]string, len(m))
+	for k, v := range m {
+		record[v] = k
+	}
+	return record
+}
+
+/* given a property list and a mapping from key name to index, return an array of string */
+func propList2String(plist datastore.PropertyList, m map[string]int) []string {
+	row := make([]string, len(m))
+
+	for _, prop := range plist {
+		v := prop.Value
+		_, ok := v.(string)
+		if !ok {
+			_, ok = v.(int64)
+			if !ok {
+				row[m[prop.Name]] = strconv.FormatFloat(asFloat(v), 'f', 6, 64)
+			} else {
+				row[m[prop.Name]] = strconv.FormatInt(v.(int64), 10)
+			}
+		} else {
+			row[m[prop.Name]] = asString(prop.Value)
+		}
+
+	}
+
+	return row
 }
