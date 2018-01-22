@@ -1,19 +1,20 @@
 package filehandler
 
 import (
-	"bufio"
+	//"bufio"
 	"bytes"
-	"context"
+	//"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"io"
+	//"io"
 	"io/ioutil"
 	"net/http"
 	//"sort"
+	"WarmupProject/database/pkg/datastorehandler"
 	"WarmupProject/database/pkg/helper"
 	"strconv"
-	"strings"
+	//"strings"
 
 	//"cloud.google.com/go/storage"
 	"google.golang.org/appengine"
@@ -86,7 +87,7 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	data := string(slurp[:])
 
-	readCSV2Datastore(ctx, data, "tvs2")
+	datastorehandler.ReadCSV2Datastore(ctx, data, "tvs2")
 
 	// w.Write(slurp)
 	fmt.Fprintln(w, data)
@@ -170,80 +171,6 @@ func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	wr.Flush() // writes the csv writer data to the buffered data io writer(b(bytes.buffer))
 
 	w.Write(br.Bytes())
-}
-
-/* read CSV data and store to datastore */
-func readCSV2Datastore(c context.Context, data string, entityName string) {
-	var datastoreKeys []*datastore.Key
-	var datastoreProps []datastore.PropertyList
-
-	br := bufio.NewReader(strings.NewReader(data))
-	//go csvHelper(r, data, entityName)
-	//t := taskqueue.NewPOSTTask("/csvhandler", url.Values())
-
-	/* HACK: assume CSV format to be
-	 * #comment
-	 * #comment
-	 * #key1 key2 key3...
-	 */
-	br.ReadLine()
-	br.ReadLine()
-
-	reader := csv.NewReader(br)
-	reader.Comment = '*'
-	keys, keyerr := reader.Read()
-	// HACK: remove the # in front of first key
-	keys[0] = strings.Split(keys[0], "#")[1]
-	if keyerr != nil {
-		println(keyerr.Error())
-	}
-	count := 0
-	prevCount := 0
-	for {
-		count = count + 1
-		var props datastore.PropertyList
-		vals, err := reader.Read()
-
-		if err == io.EOF {
-			datastore.PutMulti(c, datastoreKeys[prevCount:], datastoreProps[prevCount:])
-			break
-		}
-
-		if err != nil {
-			log.Errorf(c, "csv read error %s", err.Error())
-			break
-		}
-
-		for i, v := range vals {
-			k := helper.AsString(keys[i])
-			if f, ferr := strconv.ParseFloat(v, 64); ferr == nil {
-				props = append(props, datastore.Property{Name: k, Value: f})
-			} else {
-				props = append(props, datastore.Property{Name: k, Value: v})
-			}
-		}
-		//fmt.Fprintln(w, props)
-		// TODO： multi-add
-		key := datastore.NewIncompleteKey(c, entityName, nil)
-		datastoreKeys = append(datastoreKeys, key)
-		datastoreProps = append(datastoreProps, props)
-		if count%300 == 0 {
-			log.Infof(c, strconv.Itoa(count))
-			log.Infof(c, strconv.Itoa(len(datastoreKeys)))
-			datastore.PutMulti(c, datastoreKeys[prevCount:count], datastoreProps[prevCount:count])
-			prevCount = count
-			// if storeerror != nil {
-			// 	log.Infof(c, storeerror.Error())
-			// 	http.Error(w, storeerror.Error(), 500)
-			// }
-
-		}
-
-		//_, err = datastore.Put(c, key, &props)
-		if err != nil {
-			log.Errorf(c, "Datastore Error"+err.Error())
-		}
-	}
 }
 
 /* given a property list, return a mapping from key name to index */
