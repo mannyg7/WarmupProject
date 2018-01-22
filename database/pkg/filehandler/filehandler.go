@@ -94,32 +94,11 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+/* function to handle table download request */
 func DownloadHandler(w http.ResponseWriter, r *http.Request) {
 	c := appengine.NewContext(r)
 
-	/* start read filename from json */
-	b, err := ioutil.ReadAll(r.Body)
-
-	if err != nil {
-		log.Infof(c, "reading body")
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	/* interface{} is essentially object in Java */
-	var f interface{}
-	// store the json object mapping into f
-	err = json.Unmarshal(b, &f)
-	if err != nil {
-		log.Debugf(c, string(b))
-		log.Infof(c, "marshalling: "+err.Error())
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	m := helper.AsMap(f)
-
-	entityName := helper.AsString(m["entityName"])
+	entityName := strings.TrimPrefix(r.URL.Path, "/download/")
 
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	w.Header().Add("content-type", "application/json")

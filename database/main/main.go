@@ -28,8 +28,8 @@ func init() {
 	http.HandleFunc("/process", processhandler.QueryHandler)
 	http.HandleFunc("/blob", filehandler.BlobHandler)
 	http.HandleFunc("/upload", filehandler.UploadHandler)
-	http.HandleFunc("/download", filehandler.DownloadHandler)
-	http.HandleFunc("/test", test.TestHandler)
+	http.HandleFunc("/download/", filehandler.DownloadHandler)
+	http.HandleFunc("/test/", test.TestHandler)
 }
 
 /* function to add csv file to datastore.
