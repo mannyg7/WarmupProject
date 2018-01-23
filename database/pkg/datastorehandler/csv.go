@@ -332,6 +332,89 @@ func ProcessHistogram(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func ProcessHistogramDiff(w http.ResponseWriter, r *http.Request) {
+	w.Header().Add("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, PUT, DELETE, POST")
+	w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Requested-With, X-Session-Id")
+	b, err := ioutil.ReadAll(r.Body)
+	c := appengine.NewContext(r)
+	log.Infof(c, "request received")
+
+	if err != nil {
+		//log.Infof(c, "reading body")
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	/* interface{} is essentially object in Java */
+	var f interface{}
+	// store the json object mapping into f
+	err = json.Unmarshal(b, &f)
+	if err != nil {
+		log.Debugf(c, string(b))
+		log.Infof(c, "marshalling: "+err.Error())
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	m := helper.AsMap(f)
+	fileName1 := helper.AsString(m["fileName1"])
+	fileName2 := helper.AsString(m["fileName2"])
+	col1 := helper.AsString(m["col1"])
+	col2 := helper.AsString(m["col2"])
+	bin := helper.Str2float(helper.AsString(m["binSize"]))
+	defer r.Body.Close()
+	avgMap1 := makeAvgMap(c, fileName1, col1, col2, bin)
+	avgMap2 := makeAvgMap(c, fileName2, col1, col2, bin)
+	log.Debugf(c, "avgmap completed")
+	diffMap := make(map[float64]float64)
+	for k, v := range avgMap1 {
+		diffMap[k] = v - avgMap2[k]
+	}
+
+	var res []map[string]float64
+	for key, val := range diffMap {
+		responseMap := make(map[string]float64)
+		responseMap[col2] = key
+		responseMap[col1] = val
+		res = append(res, responseMap)
+
+		// if len(cols) != 0 {
+
+		// 	if helper.In(prop.Name, cols) {
+		// 		propToWrite = append(propToWrite, prop)
+		// 		//fmt.Fprintln(w, i, cols[i])
+		// 		m[prop.Name] = prop.Value
+		// 		//fmt.Fprintln(w, prop.Value)
+		// 	}
+		// } else {
+		// 	m[prop.Name] = prop.Value
+		// }
+	}
+	resMap := make(map[string]interface{})
+	resMap["payload"] = res
+	response, err := json.Marshal(resMap)
+	if err != nil {
+		fmt.Println("error in converting json", err.Error())
+	}
+	log.Debugf(c, "writing response")
+
+	fmt.Fprintln(w, string(response[:]))
+	// save processed data to datastore
+	// vals = append(vals, m)
+	// key := datastore.NewIncompleteKey(c, entName, nil)
+	// _, e := datastore.Put(c, key, &propToWrite)
+	// if e != nil {
+	// 	log.Errorf(c, "datastore error: "+e.Error())
+	// }
+	/* end read filename from json */
+
+	/* start read csv file */
+	// data := readFile(c, fileName)
+
+}
+
 func makeAvgMap(c context.Context, fileName string, col1 string, col2 string, bin float64) map[float64]float64 {
 	data := readBlob(c, fileName)
 	log.Debugf(c, "blob read ready")
@@ -361,14 +444,21 @@ func makeAvgMap(c context.Context, fileName string, col1 string, col2 string, bi
 	if keyerr != nil {
 		println(keyerr.Error())
 	}
-	min := -180.0
-	max := 180.0
+	min := 0.0
+	max := 90.0
 	var bins []float64
 	for i := min; i < max; i += bin {
 		bins = append(bins, i)
 	}
 	countMap := make(map[float64]int)
 	sumMap := make(map[float64]float64)
+
+	// init count map and sum map
+	for _, b := range bins {
+		countMap[b] = 0
+		sumMap[b] = 0.0
+	}
+
 	keyMap := make(map[string]int)
 	for i, key := range keys {
 		keyMap[key] = i
