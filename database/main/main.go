@@ -17,5 +17,5 @@ func init() {
 	http.HandleFunc("/download", filehandler.DownloadHandler)
 	http.HandleFunc("/test", test.TestHandler)
 	http.HandleFunc("/avg", datastorehandler.ProcessHistogram)
-	http.HandlerFunc("/avgdiff", datastorehandler.ProcessHistogramDiff)
+	http.HandleFunc("/avgdiff", datastorehandler.ProcessHistogramDiff)
 }
