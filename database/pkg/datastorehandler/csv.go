@@ -293,8 +293,8 @@ func ProcessHistogram(w http.ResponseWriter, r *http.Request) {
 	var res []map[string]float64
 	for key, val := range avgMap {
 		responseMap := make(map[string]float64)
-		responseMap[col1] = key
-		responseMap[col2] = val
+		responseMap[col2] = key
+		responseMap[col1] = val
 		res = append(res, responseMap)
 
 		// if len(cols) != 0 {
@@ -375,7 +375,7 @@ func makeAvgMap(c context.Context, fileName string, col1 string, col2 string, bi
 	}
 	idx1 := keyMap[col1]
 	log.Debugf(c, "start processing")
-	//idx2 := keyMap[col2]
+	idx2 := keyMap[col2]
 	for {
 		//count = count + 1
 		//var props datastore.PropertyList
@@ -392,9 +392,9 @@ func makeAvgMap(c context.Context, fileName string, col1 string, col2 string, bi
 		}
 
 		val1 := helper.Str2float(vals[idx1])
-		//val2 := helper.Str2float(vals[idx2])
-		for _, lowBound := range bins {
-			if val1 > lowBound {
+		val2 := helper.Str2float(vals[idx2])
+		for i, lowBound := range bins {
+			if i < len(bins) && val2 > bins[i] && val2 < bins[i+1] {
 				countMap[lowBound] = countMap[lowBound] + 1
 				sumMap[lowBound] = sumMap[lowBound] + val1
 			}
@@ -429,7 +429,15 @@ func makeAvgMap(c context.Context, fileName string, col1 string, col2 string, bi
 	log.Debugf(c, "Mapping finished")
 	average := make(map[float64]float64)
 	for k, v := range sumMap {
-		average[k] = v / float64(countMap[k])
+		log.Debugf(c, strconv.FormatFloat(k, 'f', 6, 64))
+		log.Debugf(c, strconv.FormatInt(int64(countMap[k]), 10))
+		log.Debugf(c, strconv.FormatFloat(sumMap[k], 'f', 6, 64))
+		if countMap[k] != 0 {
+			average[k] = v / float64(countMap[k])
+			log.Debugf(c, strconv.FormatFloat(average[k], 'f', 6, 64))
+		} else {
+			average[k] = 0
+		}
 	}
 	return average
 
