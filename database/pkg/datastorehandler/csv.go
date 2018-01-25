@@ -27,6 +27,7 @@ import (
  * This function will read fileName field from JSON in POST request,
  * find corresponding file in Google Storage, parse csv, and store
  * entries to Google Datastore.
+ * For RAW data
 **/
 func CsvHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
@@ -121,7 +122,7 @@ func CsvHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		//fmt.Fprintln(w, props)
 		// TODO： multi-add
-		key := datastore.NewIncompleteKey(c, entityName, nil)
+		key := datastore.NewIncompleteKey(c, entityName, dataKey(c, entityName))
 		datastoreKeys = append(datastoreKeys, key)
 		datastoreProps = append(datastoreProps, props)
 		if count%300 == 0 {
@@ -130,8 +131,9 @@ func CsvHandler(w http.ResponseWriter, r *http.Request) {
 			_, storeerror := datastore.PutMulti(c, datastoreKeys[prevCount:count], datastoreProps[prevCount:count])
 			prevCount = count
 			if storeerror != nil {
-				log.Infof(c, storeerror.Error())
+				log.Errorf(c, storeerror.Error())
 				http.Error(w, storeerror.Error(), 500)
+				return
 			}
 
 		}
@@ -197,7 +199,7 @@ func ReadCSV2Datastore(c context.Context, data string, entityName string) {
 		}
 		//fmt.Fprintln(w, props)
 		// TODO： multi-add
-		key := datastore.NewIncompleteKey(c, entityName, nil)
+		key := datastore.NewIncompleteKey(c, entityName, dataKey(c, entityName))
 		datastoreKeys = append(datastoreKeys, key)
 		datastoreProps = append(datastoreProps, props)
 		if count%300 == 0 {
@@ -531,4 +533,9 @@ func makeAvgMap(c context.Context, fileName string, col1 string, col2 string, bi
 	}
 	return average
 
+}
+
+func dataKey(c context.Context, kind string) *datastore.Key {
+	// The string "default_guestbook" here could be varied to have multiple guestbooks.
+	return datastore.NewKey(c, kind, "default_data", 0, nil)
 }
